@@ -28,6 +28,8 @@ export default defineConfig({
   test: {
     // .worktrees, geliştirme sırasında kullanılan git worktree'leri barındırır (gitignore'da) —
     // vitest'in varsayılan glob'u bunları da tarayıp testleri iki kez çalıştırmasın diye hariç tutulur.
-    exclude: ['**/node_modules/**', '**/.worktrees/**']
+    exclude: ['**/node_modules/**', '**/.worktrees/**'],
+    // router testleri window/document kullanıyor; varsayılan 'node' ortamında bunlar tanımsız kalır.
+    environment: 'jsdom'
   }
 });
