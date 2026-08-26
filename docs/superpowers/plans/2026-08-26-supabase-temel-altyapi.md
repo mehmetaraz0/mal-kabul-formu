@@ -18,6 +18,7 @@
 - RLS her tabloda açık olacak; hiçbir tablo public/anon yazma izni almayacak.
 - Firma verisi kaynağı: `C:\Users\mta-1\Desktop\Firma_Isim_Listesi (1).xlsx` (62 firma). Ürün verisi kaynağı: kullanıcının paylaştığı "KASAP SİPARİŞ FORMU" görseli/PDF'i (bu planda transkript edilmiş haliyle seed script'ine gömülür).
 - **Varsayım (kullanıcıya doğrulatılmalı):** Gerçek "Mal Kabul Formu" kağıt şablonu henüz elde değil; bu plan sadece veri şemasını kurar, form/print tasarımı Plan 4'te ele alınır ve o plan bu varsayımı tekrar işaretler.
+- **Güvenlik:** Veritabanından gelen serbest metin (firma adı, ürün adı, kullanıcı tam adı, not alanları vb.) `innerHTML` içine yazılırken MUTLAKA Task 6'da eklenen `src/lib/html.js`'teki `escapeHtml()` ile kaçışlanmalı — stored XSS riski (Task 6 review'da tespit edildi). Plan 2, 3 ve 4'teki tüm listeleme/detay sayfaları bu kurala tabidir.
 
 ---
 
@@ -710,7 +711,8 @@ export async function signIn(email, password) {
 }
 
 export async function signOut() {
-  await supabase.auth.signOut();
+  const { error } = await supabase.auth.signOut();
+  if (error) throw error;
 }
 
 export async function getCurrentProfile() {
@@ -771,31 +773,48 @@ export function renderLogin(container, onSuccess) {
 }
 ```
 
+- [ ] **Step 5b: `src/lib/html.js` yaz — paylaşılan HTML escape yardımcı fonksiyonu**
+
+Veritabanından gelen serbest metinler (firma adı, ürün adı, kullanıcı tam adı gibi) `innerHTML` içine yazılırken kaçışsız enjeksiyona (stored XSS) karşı bu yardımcı ile kaçışlanmalı — Plan 2/3/4'teki tüm listeleme sayfaları da bunu kullanacak:
+
+```javascript
+export function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str ?? '';
+  return div.innerHTML;
+}
+```
+
 - [ ] **Step 6: `src/main.js` içini güncelle — oturum durumuna göre login veya karşılama ekranı göster**
 
 ```javascript
 import { getCurrentProfile, onAuthStateChange, signOut } from './lib/auth.js';
 import { renderLogin } from './pages/login.js';
+import { escapeHtml } from './lib/html.js';
 
 const app = document.querySelector('#app');
 
 async function renderApp() {
-  const profile = await getCurrentProfile();
-  if (!profile) {
-    renderLogin(app, renderApp);
-    return;
+  try {
+    const profile = await getCurrentProfile();
+    if (!profile) {
+      renderLogin(app, renderApp);
+      return;
+    }
+    app.innerHTML = `
+      <header style="display:flex;justify-content:space-between;padding:1rem;background:#1e3a5f;color:white;">
+        <span>${escapeHtml(profile.full_name)} (${escapeHtml(profile.role)})</span>
+        <button id="logout-btn">Çıkış</button>
+      </header>
+      <main style="padding:1rem;">Ana sayfa — sonraki planlarda doldurulacak.</main>
+    `;
+    app.querySelector('#logout-btn').addEventListener('click', async () => {
+      await signOut();
+      renderApp();
+    });
+  } catch (err) {
+    app.innerHTML = `<p style="color:#b00020;padding:1rem;">Bir hata oluştu: ${escapeHtml(err.message)}</p>`;
   }
-  app.innerHTML = `
-    <header style="display:flex;justify-content:space-between;padding:1rem;background:#1e3a5f;color:white;">
-      <span>${profile.full_name} (${profile.role})</span>
-      <button id="logout-btn">Çıkış</button>
-    </header>
-    <main style="padding:1rem;">Ana sayfa — sonraki planlarda doldurulacak.</main>
-  `;
-  app.querySelector('#logout-btn').addEventListener('click', async () => {
-    await signOut();
-    renderApp();
-  });
 }
 
 onAuthStateChange(() => renderApp());
