@@ -6,8 +6,11 @@ language plpgsql
 security definer set search_path = public
 as $$
 begin
+  -- new.email artık gerçek bir e-posta değil, "kullaniciadi@malkabul.local" biçiminde sahte bir
+  -- adres olabilir (bkz. Task 6 login değişikliği) — full_name varsayılanı olarak tüm adresi değil,
+  -- sadece @ öncesi kullanıcı adını kullanmak daha okunaklı bir görünen isim verir.
   insert into public.profiles (id, full_name, role)
-  values (new.id, coalesce(new.raw_user_meta_data->>'full_name', new.email), 'depo_yonetici');
+  values (new.id, coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)), 'depo_yonetici');
   return new;
 end;
 $$;
