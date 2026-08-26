@@ -24,5 +24,10 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html}']
       }
     })
-  ]
+  ],
+  test: {
+    // .worktrees, geliştirme sırasında kullanılan git worktree'leri barındırır (gitignore'da) —
+    // vitest'in varsayılan glob'u bunları da tarayıp testleri iki kez çalıştırmasın diye hariç tutulur.
+    exclude: ['**/node_modules/**', '**/.worktrees/**']
+  }
 });
