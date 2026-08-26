@@ -16,6 +16,7 @@
 - `uygunluk` alanı üç değerden biri olabilir: `uygun`, `uygun_degil`, `beklemede` (varsayılan). Kalite ekibi her satırı tek tek `uygun`/`uygun_degil` olarak işaretlemeden kaydı `onaylandi` yapamaz.
 - Teslim alan personel adı `receipts.received_by` üzerinden (oturum açan `depo_yonetici` profili), kalite kontrolü yapan personel adı `receipts.quality_by` üzerinden (oturum açan `kalite_ekibi` profili) otomatik kaydedilir — elle imza alanı yerine oturum kimliği "imza" yerine geçer (elle imza/ıslak imza gerekiyorsa bu, gerçek Mal Kabul Formu şablonu elde edildiğinde Plan 4'te yazdırma çıktısına eklenecek ayrı bir konudur).
 - **Varsayım:** İrsaliye No ve Sipariş No serbest metin alanı olarak tutulur (ayrı bir "siparişler" tablosuyla eşleştirme bu planın kapsamı dışında — kullanıcı sadece bu iki alanın forma girilmesini istedi, otomatik eşleştirme istemedi).
+- **Güvenlik (Plan 1 Task 6 review'dan):** Veritabanından/formdan gelen serbest metin (firma adı, ürün adı/kodu, lot no, irsaliye/sipariş no, not alanları vb.) `innerHTML` içine yazılırken MUTLAKA `src/lib/html.js`'teki `escapeHtml()` ile kaçışlanmalı (stored XSS önlemi) — bu, `yeni-kabul.js`'teki satır tablosunu ve `kalite-onay.js`'teki detay görünümünü de kapsar. Ayrıca bir değer `value="..."` gibi bir HTML attribute içine yazılıyorsa (örn. `<input value="${item.note}">`), `escapeHtml()` çift tırnak (`"`) karakterini de kaçışlamalı ki not alanındaki bir `"` attribute'tan kaçıp yeni bir HTML özniteliği/olayı enjekte edemesin.
 
 ---
 

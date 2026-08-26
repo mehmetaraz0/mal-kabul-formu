@@ -15,6 +15,7 @@
 - Firma ve ürün **düzenleme/silme** sadece `depo_yonetici` rolüne açık (Plan 1 RLS: `*_update_manager`, `*_delete_manager`). Arayüz bu kısıtı hem RLS'e güvenerek hem de buton görünürlüğünü rol bazlı gizleyerek uygular.
 - Ürün kategorisi sabit iki değer: `ET`, `BALIK`. Birim sabit iki değer: `kg`, `ad`. Yeni ürün formunda bunlar serbest metin değil, `<select>` ile seçilir (veri bütünlüğü için).
 - Arama, istemci tarafında (in-memory filter) yapılır — firma/ürün sayısı (62/63) küçük olduğu için sunucu taraflı sayfalama gerekmez.
+- **Güvenlik (Plan 1 Task 6 review'dan):** Veritabanından gelen serbest metin (firma adı, ürün adı/kodu vb.) `innerHTML` içine yazılırken MUTLAKA `src/lib/html.js`'teki `escapeHtml()` ile kaçışlanmalı (stored XSS önlemi). Bu plandaki `renderSearchList` (search-list.js) ve her `getLabel` fonksiyonunun ürettiği metin bu kurala tabidir — `getLabel` çıktısını `escapeHtml()`'den geçirmeden `innerHTML`'e yazmayın.
 
 ---
 
