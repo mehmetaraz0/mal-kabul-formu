@@ -20,6 +20,8 @@
 - **Varsayım (kullanıcıya doğrulatılmalı):** Gerçek "Mal Kabul Formu" kağıt şablonu henüz elde değil; bu plan sadece veri şemasını kurar, form/print tasarımı Plan 4'te ele alınır ve o plan bu varsayımı tekrar işaretler.
 - **Güvenlik:** Veritabanından gelen serbest metin (firma adı, ürün adı, kullanıcı tam adı, not alanları vb.) `innerHTML` içine yazılırken MUTLAKA Task 6'da eklenen `src/lib/html.js`'teki `escapeHtml()` ile kaçışlanmalı — stored XSS riski (Task 6 review'da tespit edildi). Plan 2, 3 ve 4'teki tüm listeleme/detay sayfaları bu kurala tabidir.
 - **Giriş yöntemi (kullanıcı talebiyle güncellendi):** Depo personelinin tamamında e-posta olmayabileceğinden giriş ekranı kullanıcı adı + şifre ister; Supabase Auth'un e-posta zorunluluğunu karşılamak için kullanıcı adına sabit `@malkabul.local` son eki eklenir (bkz. Task 6). Yeni personel hesabı Supabase Dashboard'dan `kullaniciadi@malkabul.local` e-postasıyla ve **Auto Confirm User** işaretli olarak açılır.
+- **KRİTİK güvenlik gereksinimi (final review'da tespit edildi):** Supabase Dashboard → Authentication → Sign In / Providers → Email → **"Allow new users to sign up" MUTLAKA kapatılmalı**. Kapatılmazsa, herkese açık `anon` anahtarıyla (istemci JS bundle'ında zaten herkese açık) `supabase.auth.signUp()` çağrılarak `@malkabul.local` uzantılı sahte bir hesap self-servis açılabilir; `on_auth_user_created` trigger'ı bu hesaba otomatik `depo_yonetici` rolü verir ve canlı, gerçek verili projeye yazma yetkisi kazandırır. Bu ayar kod ile kapatılamaz, sadece Dashboard'dan manuel yapılır.
+- **Task 4 sonrası güvenlik sıkılaştırması (final review'da bulundu, `0004_receipt_items_ve_receipts_sikilastirma.sql` ile eklendi):** `receipt_items_update_flow` politikasında `with check` eksikti — bu, `receipt_items_insert_manager`'ın `uygunluk = 'beklemede'` zorunluluğunu bir sonraki UPDATE ile tamamen etkisiz kılıyordu (bir depo_yonetici, ürünü ekledikten hemen sonra `uygunluk`'u `uygun` yapıp öyle kalite onayına gönderebiliyordu). Ayrıca `quality_by` sahtelenebiliyordu (herhangi bir kalite_ekibi üyesi başka bir kullanıcının UUID'sini `quality_by` olarak yazabiliyordu) ve `receipts`'in temel alanları (`company_id`, `received_by`, `receipt_date`, `irsaliye_no`, `siparis_no`, `client_uuid`) oluşturulduktan sonra hiçbir RLS politikası tarafından donduruLmamıştı. `0004` migration'ı: (a) `receipt_items_update_flow`'a uygunluk geçişlerini rol bazlı kısıtlayan bir `with check` ekler, (b) `receipts_insert_manager`'a `quality_by is null and quality_note is null` ekler, (c) `receipts_update_manager_draft`'ın kalite dalına `quality_by = auth.uid()` ve depo dalına `quality_by is null` ekler, (d) yukarıdaki 6 temel alanı BEFORE UPDATE trigger'ıyla donduruLur, (e) `updated_at`'ı otomatik güncelleyen bir trigger ekler, (f) `receipt_items(receipt_id, line_no)` üzerine bir UNIQUE kısıt ekler (Plan 5'in offline senkron kuyruğu bu anahtar olmadan retry sırasında satırları sessizce kaybediyordu).
 
 ---
 
@@ -785,11 +787,19 @@ export function renderLogin(container, onSuccess) {
 
 Veritabanından gelen serbest metinler (firma adı, ürün adı, kullanıcı tam adı gibi) `innerHTML` içine yazılırken kaçışsız enjeksiyona (stored XSS) karşı bu yardımcı ile kaçışlanmalı — Plan 2/3/4'teki tüm listeleme sayfaları da bunu kullanacak:
 
+**Not (final review'da güncellendi):** DOM tabanlı ilk taslak (`document.createElement`) hem tırnak karakterlerini kaçışlamıyordu hem de vitest'in varsayılan Node ortamında (jsdom olmadan) `document` tanımsız olduğu için testler çöküyordu. Bağımlılıksız, regex tabanlı şu sürüm kullanılmalı:
+
 ```javascript
+const ESCAPE_MAP = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;'
+};
+
 export function escapeHtml(str) {
-  const div = document.createElement('div');
-  div.textContent = str ?? '';
-  return div.innerHTML;
+  return String(str ?? '').replace(/[&<>"']/g, (ch) => ESCAPE_MAP[ch]);
 }
 ```
 
@@ -843,9 +853,197 @@ git commit -m "feat: Supabase Auth ile login/logout ve rol kontrolü ekle"
 
 ---
 
+### Task 7: Final Review Bulgularının Düzeltilmesi (Güvenlik Sıkılaştırma + Test Bağımsızlığı)
+
+Bu görev, Task 1-6 tamamlandıktan sonra yapılan bütün-plan (final) code review'da bulunan Critical/Important bulguları kapatır.
+
+**Files:**
+- Create: `supabase/migrations/0004_receipt_items_ve_receipts_sikilastirma.sql`
+- Create: `src/lib/role.js`
+- Modify: `src/lib/auth.js`
+- Modify: `src/main.js`
+- Modify: `tests/auth.test.js`
+
+**Interfaces:**
+- Consumes: Task 3/4'teki tablolar ve politikalar.
+- Produces: `hasRole` artık `src/lib/role.js`'ten export edilir (Supabase client'ı import etmez); `src/lib/auth.js` geriye dönük uyumluluk için onu re-export eder, böylece Plan 2/3'teki mevcut `import { hasRole } from '../lib/auth.js'` satırları değişmeden çalışmaya devam eder.
+
+- [ ] **Step 1: `supabase/migrations/0004_receipt_items_ve_receipts_sikilastirma.sql` yaz**
+
+```sql
+-- 0004_receipt_items_ve_receipts_sikilastirma.sql
+
+-- C1: receipt_items_update_flow'da with check eksikti; bu da receipt_items_insert_manager'ın
+-- "uygunluk = beklemede" zorunluluğunu bir sonraki UPDATE ile tamamen etkisiz kılıyordu.
+drop policy if exists "receipt_items_update_flow" on receipt_items;
+create policy "receipt_items_update_flow" on receipt_items for update to authenticated
+  using (
+    exists (
+      select 1 from receipts r
+      join profiles p on p.id = auth.uid()
+      where r.id = receipt_id and (
+        (r.status = 'taslak' and r.received_by = auth.uid() and p.role = 'depo_yonetici')
+        or (r.status = 'kalite_bekliyor' and p.role = 'kalite_ekibi')
+      )
+    )
+  )
+  with check (
+    exists (
+      select 1 from receipts r
+      join profiles p on p.id = auth.uid()
+      where r.id = receipt_id and (
+        (r.status = 'taslak' and r.received_by = auth.uid() and p.role = 'depo_yonetici' and uygunluk = 'beklemede')
+        or (r.status = 'kalite_bekliyor' and p.role = 'kalite_ekibi' and uygunluk in ('uygun', 'uygun_degil', 'beklemede'))
+      )
+    )
+  );
+
+-- I1: quality_by sahtelenebiliyordu ve depo_yonetici, oluşturma sırasında quality_by/quality_note'u
+-- önceden doldurabiliyordu.
+drop policy if exists "receipts_insert_manager" on receipts;
+create policy "receipts_insert_manager" on receipts for insert to authenticated
+  with check (
+    received_by = auth.uid()
+    and status = 'taslak'
+    and quality_by is null
+    and quality_note is null
+    and exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'depo_yonetici')
+  );
+
+drop policy if exists "receipts_update_manager_draft" on receipts;
+create policy "receipts_update_manager_draft" on receipts for update to authenticated
+  using (
+    (status = 'taslak' and received_by = auth.uid()
+      and exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'depo_yonetici'))
+    or
+    (status = 'kalite_bekliyor'
+      and exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'kalite_ekibi'))
+  )
+  with check (
+    (received_by = auth.uid() and status in ('taslak', 'kalite_bekliyor') and quality_by is null
+      and exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'depo_yonetici'))
+    or
+    (status in ('kalite_bekliyor', 'onaylandi', 'reddedildi') and quality_by = auth.uid()
+      and exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'kalite_ekibi'))
+  );
+
+-- I1 (devamı): temel alanlar oluşturulduktan sonra hiçbir rol tarafından değiştirilemez.
+-- RLS with check tek başına eski/yeni satırı karşılaştıramadığından bir trigger gerekir.
+create or replace function public.lock_receipt_core_fields()
+returns trigger
+language plpgsql
+as $$
+begin
+  if new.company_id is distinct from old.company_id
+    or new.received_by is distinct from old.received_by
+    or new.receipt_date is distinct from old.receipt_date
+    or new.irsaliye_no is distinct from old.irsaliye_no
+    or new.siparis_no is distinct from old.siparis_no
+    or new.client_uuid is distinct from old.client_uuid
+  then
+    raise exception 'Bu alanlar oluşturulduktan sonra değiştirilemez: company_id, received_by, receipt_date, irsaliye_no, siparis_no, client_uuid';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists lock_receipt_core_fields_trigger on receipts;
+create trigger lock_receipt_core_fields_trigger
+  before update on receipts
+  for each row execute procedure public.lock_receipt_core_fields();
+
+-- I4: updated_at hiçbir zaman güncellenmiyordu.
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists set_receipts_updated_at on receipts;
+create trigger set_receipts_updated_at
+  before update on receipts
+  for each row execute procedure public.set_updated_at();
+
+-- I3: receipt_items'ta idempotency anahtarı yoktu; Plan 5'in çevrimdışı senkron kuyruğu aynı
+-- receipt_id + line_no ile tekrar denendiğinde (receipts.client_uuid çakışması "zaten senkronize"
+-- sayılıp items insert'i hiç yapılmadan dönüyordu) satırların sessizce kaybolmasına yol açıyordu.
+alter table receipt_items add constraint receipt_items_receipt_line_unique unique (receipt_id, line_no);
+```
+
+- [ ] **Step 2: Migration'ı Supabase SQL Editor'de çalıştır (manuel)**
+
+Expected: Hata yok. `receipt_items_update_flow` ve `receipts_update_manager_draft`/`receipts_insert_manager` politikaları güncellenmiş görünür (Database → Policies).
+
+- [ ] **Step 3: Supabase Dashboard'da self-servis kaydı kapat (manuel, KRİTİK)**
+
+Authentication → Sign In / Providers → Email → **"Allow new users to sign up"** seçeneğini kapat.
+Expected: Kapatıldıktan sonra `supabase.auth.signUp()` ile yeni hesap oluşturma denemesi hata döner; hesaplar artık sadece Dashboard → Authentication → Users → Add user ile açılabilir.
+
+- [ ] **Step 4: `src/lib/role.js` oluştur (client'tan bağımsız saf fonksiyon)**
+
+```javascript
+export function hasRole(profile, role) {
+  return !!profile && profile.role === role;
+}
+```
+
+- [ ] **Step 5: `src/lib/auth.js`'i güncelle — `hasRole`'u client'tan bağımsız modülden re-export et**
+
+`src/lib/auth.js` içindeki yerel `hasRole` tanımını kaldır, dosyanın en üstüne ekle:
+
+```javascript
+export { hasRole } from './role.js';
+```
+
+(Diğer tüm export'lar — `signIn`, `signOut`, `getCurrentProfile`, `onAuthStateChange` — değişmeden kalır.)
+
+- [ ] **Step 6: `tests/auth.test.js`'teki `hasRole` testini `role.js`'ten import edecek şekilde güncelle**
+
+```javascript
+import { hasRole } from '../src/lib/role.js';
+```
+
+(Bu satır, `../src/lib/auth.js`'ten import eden eski satırın yerine geçer — böylece bu test dosyası artık `src/lib/supabase.js`'i hiç yüklemez ve `.env.local` olmadan da çalışır.)
+
+- [ ] **Step 7: Testi `.env.local` olmadan da çalıştığını doğrula**
+
+Run: `npm run test`
+Expected: PASS (tüm testler, `hasRole` dahil). Ayrıca (isteğe bağlı doğrulama): `.env.local`'i geçici olarak başka bir isme taşıyıp `npm run test -- tests/auth.test.js tests/role.test.js` çalıştırıldığında da PASS olması beklenir (artık `src/lib/supabase.js` import edilmediği için); test bitince dosyayı eski adına geri taşı.
+
+- [ ] **Step 8: `src/main.js`'teki hata mesajını `escapeHtml` ile kaçışla (final review'da planla kod arasında tutarsızlık bulundu)**
+
+`renderApp()` içindeki catch bloğunu şuna güncelle:
+
+```javascript
+  } catch (err) {
+    app.innerHTML = `<p style="color:#b00020;padding:1rem;">Bir hata oluştu: ${escapeHtml(err.message)}</p>`;
+  }
+```
+
+(`escapeHtml` zaten dosyanın başında import edilmiş durumda — sadece bu satırdaki `${err.message}` ifadesini `${escapeHtml(err.message)}` yap.)
+
+- [ ] **Step 9: Tüm testleri ve build'i çalıştır**
+
+Run: `npm run test && npm run build`
+Expected: Tümü yeşil/temiz.
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add supabase/migrations/0004_receipt_items_ve_receipts_sikilastirma.sql src/lib/role.js src/lib/auth.js src/main.js tests/auth.test.js
+git commit -m "fix: final review bulgularını kapat - RLS sıkılaştırma, updated_at trigger, idempotency, test bağımsızlığı, err.message escaping"
+```
+
+---
+
 ## Bu Plan Tamamlandığında Doğrulanacaklar
 
 - `npm run dev` ile uygulama açılır, login çalışır, çıkış çalışır.
-- `npm run test` yeşil.
+- `npm run test` yeşil, `.env.local` olmadan da `hasRole` testi çalışır.
 - Supabase Table Editor'de 5 tablo, RLS aktif, 62 firma + 63 ürün seed edilmiş.
+- `0004` migration'ı canlı Supabase'e uygulanmış, self-servis kayıt Dashboard'dan kapatılmış.
 - Bir sonraki plan (`2026-08-26-firma-urun-yonetimi.md`) bu tablolara ve `src/lib/auth.js` API'sine güvenerek devam edebilir.

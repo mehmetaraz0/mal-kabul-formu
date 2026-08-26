@@ -428,22 +428,28 @@ export async function createReceiptWithItems({ companyId, receiptDate, irsaliyeN
     .select()
     .single();
 
+  let receiptId;
   if (receiptError) {
     if (receiptError.code === '23505') {
-      // client_uuid zaten var: bu kayıt daha önce başarıyla senkronize olmuş, tekrar oluşturma
+      // client_uuid zaten var: bu kayıt daha önce başarıyla senkronize olmuş (veya kısmen
+      // senkronize olup satırları eklenmeden yarıda kalmış olabilir) — receipt'i yeniden
+      // oluşturmuyoruz ama satırları aşağıdaki upsert ile yine de (idempotent şekilde) yazıyoruz.
       const { data: existing, error: findError } = await supabase
         .from('receipts')
         .select('id')
         .eq('client_uuid', uuid)
         .single();
       if (findError) throw findError;
-      return existing.id;
+      receiptId = existing.id;
+    } else {
+      throw receiptError;
     }
-    throw receiptError;
+  } else {
+    receiptId = receipt.id;
   }
 
   const rows = items.map((item, index) => ({
-    receipt_id: receipt.id,
+    receipt_id: receiptId,
     product_id: item.productId,
     line_no: index + 1,
     lot_no: item.lotNo || null,
@@ -452,10 +458,15 @@ export async function createReceiptWithItems({ companyId, receiptDate, irsaliyeN
     unit: item.unit,
     uygunluk: 'beklemede'
   }));
-  const { error: itemsError } = await supabase.from('receipt_items').insert(rows);
+  // upsert + onConflict: aynı (receipt_id, line_no) ile tekrar denenen bir senkron, satırları
+  // sessizce atlamak yerine üzerine yazar — Plan 1 Task 7'de eklenen
+  // receipt_items_receipt_line_unique kısıtı bu upsert'in idempotent çalışmasını sağlar.
+  const { error: itemsError } = await supabase
+    .from('receipt_items')
+    .upsert(rows, { onConflict: 'receipt_id,line_no' });
   if (itemsError) throw itemsError;
 
-  return receipt.id;
+  return receiptId;
 }
 ```
 
