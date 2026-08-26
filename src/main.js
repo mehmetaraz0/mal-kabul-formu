@@ -23,7 +23,7 @@ async function renderApp() {
       renderApp();
     });
   } catch (err) {
-    app.innerHTML = `<p style="color:#b00020;padding:1rem;">Bir hata oluştu: ${err.message}</p>`;
+    app.innerHTML = `<p style="color:#b00020;padding:1rem;">Bir hata oluştu: ${escapeHtml(err.message)}</p>`;
   }
 }
 

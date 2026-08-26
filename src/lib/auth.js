@@ -1,3 +1,5 @@
+export { hasRole } from './role.js';
+
 import { supabase } from './supabase.js';
 
 export async function signIn(email, password) {
@@ -25,8 +27,4 @@ export async function getCurrentProfile() {
 
 export function onAuthStateChange(callback) {
   return supabase.auth.onAuthStateChange((_event, session) => callback(session));
-}
-
-export function hasRole(profile, role) {
-  return !!profile && profile.role === role;
 }

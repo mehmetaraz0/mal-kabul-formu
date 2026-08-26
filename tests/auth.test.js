@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hasRole } from '../src/lib/auth.js';
+import { hasRole } from '../src/lib/role.js';
 
 describe('hasRole', () => {
   it('profil rolü eşleşince true döner', () => {
