@@ -402,7 +402,11 @@ create policy "profiles_update_own" on profiles for update to authenticated
   with check (id = auth.uid());
 -- role sütunu authenticated kullanıcılar tarafından hiç değiştirilemez (self-escalation engeli):
 -- yükseltme sadece Supabase Dashboard'dan manuel yapılır (bkz. Global Constraints).
-revoke update (role) on profiles from authenticated;
+-- Supabase yeni tablolara varsayılan olarak authenticated rolüne tablo genelinde UPDATE
+-- yetkisi verir; sadece sütun bazlı revoke bunu geçersiz kılmaz (tablo genelindeki yetki
+-- tüm sütunları zaten kapsar). Önce tablo genelindeki UPDATE yetkisini tamamen kaldırıp,
+-- ardından sadece full_name sütununa izin veriyoruz.
+revoke update on profiles from authenticated;
 grant update (full_name) on profiles to authenticated;
 
 -- companies: authenticated herkes okuyabilir ve ekleyebilir; güncelleme/silme sadece depo_yonetici
