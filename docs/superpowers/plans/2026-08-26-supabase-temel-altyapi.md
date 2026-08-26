@@ -19,6 +19,7 @@
 - Firma verisi kaynağı: `C:\Users\mta-1\Desktop\Firma_Isim_Listesi (1).xlsx` (62 firma). Ürün verisi kaynağı: kullanıcının paylaştığı "KASAP SİPARİŞ FORMU" görseli/PDF'i (bu planda transkript edilmiş haliyle seed script'ine gömülür).
 - **Varsayım (kullanıcıya doğrulatılmalı):** Gerçek "Mal Kabul Formu" kağıt şablonu henüz elde değil; bu plan sadece veri şemasını kurar, form/print tasarımı Plan 4'te ele alınır ve o plan bu varsayımı tekrar işaretler.
 - **Güvenlik:** Veritabanından gelen serbest metin (firma adı, ürün adı, kullanıcı tam adı, not alanları vb.) `innerHTML` içine yazılırken MUTLAKA Task 6'da eklenen `src/lib/html.js`'teki `escapeHtml()` ile kaçışlanmalı — stored XSS riski (Task 6 review'da tespit edildi). Plan 2, 3 ve 4'teki tüm listeleme/detay sayfaları bu kurala tabidir.
+- **Giriş yöntemi (kullanıcı talebiyle güncellendi):** Depo personelinin tamamında e-posta olmayabileceğinden giriş ekranı kullanıcı adı + şifre ister; Supabase Auth'un e-posta zorunluluğunu karşılamak için kullanıcı adına sabit `@malkabul.local` son eki eklenir (bkz. Task 6). Yeni personel hesabı Supabase Dashboard'dan `kullaniciadi@malkabul.local` e-postasıyla ve **Auto Confirm User** işaretli olarak açılır.
 
 ---
 
@@ -499,8 +500,11 @@ language plpgsql
 security definer set search_path = public
 as $$
 begin
+  -- new.email artık gerçek bir e-posta değil, "kullaniciadi@malkabul.local" biçiminde sahte bir
+  -- adres olabilir (bkz. Task 6 login değişikliği) — full_name varsayılanı olarak tüm adresi değil,
+  -- sadece @ öncesi kullanıcı adını kullanmak daha okunaklı bir görünen isim verir.
   insert into public.profiles (id, full_name, role)
-  values (new.id, coalesce(new.raw_user_meta_data->>'full_name', new.email), 'depo_yonetici');
+  values (new.id, coalesce(new.raw_user_meta_data->>'full_name', split_part(new.email, '@', 1)), 'depo_yonetici');
   return new;
 end;
 $$;
@@ -743,15 +747,19 @@ Expected: PASS (3/3).
 
 - [ ] **Step 5: `src/pages/login.js` yaz**
 
+**Not (kullanıcı talebiyle güncellendi):** Depo personelinin tamamında e-posta adresi olmayabileceğinden giriş ekranı e-posta yerine **kullanıcı adı** ister. Supabase Auth yerleşik olarak e-posta tabanlı çalıştığından, kullanıcı adı arka planda sabit bir iç alan adı (`@malkabul.local`) eklenerek sahte-ama-geçerli-formatlı bir e-postaya çevrilir ve `signIn()`'e öyle gönderilir — gerçekten mail gönderilmez, sadece Supabase'in email-formatı validasyonunu karşılamak için kullanılır. Yeni personel hesabı açılırken (Supabase Dashboard → Authentication → Users → Add user) "Email" alanına `kullaniciadi@malkabul.local` yazılmalı ve **Auto Confirm User** seçeneği işaretlenmeli (bu adres gerçek olmadığından onay maili asla ulaşmaz).
+
 ```javascript
 import { signIn } from '../lib/auth.js';
+
+const EMAIL_DOMAIN = '@malkabul.local';
 
 export function renderLogin(container, onSuccess) {
   container.innerHTML = `
     <form id="login-form" style="max-width:320px;margin:4rem auto;display:flex;flex-direction:column;gap:0.75rem;">
       <h1>Mal Kabul Formu</h1>
-      <input type="email" id="login-email" placeholder="E-posta" required />
-      <input type="password" id="login-password" placeholder="Şifre" required />
+      <input type="text" id="login-username" placeholder="Kullanıcı Adı" required autocomplete="username" />
+      <input type="password" id="login-password" placeholder="Şifre" required autocomplete="current-password" />
       <button type="submit">Giriş Yap</button>
       <p id="login-error" style="color:#b00020;"></p>
     </form>
@@ -759,12 +767,12 @@ export function renderLogin(container, onSuccess) {
 
   container.querySelector('#login-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const email = container.querySelector('#login-email').value.trim();
+    const username = container.querySelector('#login-username').value.trim().toLowerCase();
     const password = container.querySelector('#login-password').value;
     const errorEl = container.querySelector('#login-error');
     errorEl.textContent = '';
     try {
-      await signIn(email, password);
+      await signIn(username + EMAIL_DOMAIN, password);
       onSuccess();
     } catch (err) {
       errorEl.textContent = 'Giriş başarısız: ' + err.message;
