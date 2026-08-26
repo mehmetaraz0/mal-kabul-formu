@@ -47,7 +47,7 @@ create policy "receipts_update_manager_draft" on receipts for update to authenti
       and exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'kalite_ekibi'))
   )
   with check (
-    (received_by = auth.uid() and status in ('taslak', 'kalite_bekliyor') and quality_by is null
+    (received_by = auth.uid() and status in ('taslak', 'kalite_bekliyor') and quality_by is null and quality_note is null
       and exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'depo_yonetici'))
     or
     (status in ('kalite_bekliyor', 'onaylandi', 'reddedildi') and quality_by = auth.uid()
@@ -59,6 +59,7 @@ create policy "receipts_update_manager_draft" on receipts for update to authenti
 create or replace function public.lock_receipt_core_fields()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
   if new.company_id is distinct from old.company_id
@@ -83,6 +84,7 @@ create trigger lock_receipt_core_fields_trigger
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
+set search_path = public
 as $$
 begin
   new.updated_at = now();
@@ -99,3 +101,33 @@ create trigger set_receipts_updated_at
 -- receipt_id + line_no ile tekrar denendiğinde (receipts.client_uuid çakışması "zaten senkronize"
 -- sayılıp items insert'i hiç yapılmadan dönüyordu) satırların sessizce kaybolmasına yol açıyordu.
 alter table receipt_items add constraint receipt_items_receipt_line_unique unique (receipt_id, line_no);
+
+-- I2 (final review round 2): kalite_ekibi sadece uygunluk/note değiştirebilir, diğer satır
+-- alanlarını (miktar, ürün, lot no, SKT, sıra no) değiştiremez — bu alanlar depo_yonetici'nin
+-- taslak aşamasında düzeltme yapabilmesi için kalite_ekibi DIŞINDAKİ roller için kilitli değildir.
+create or replace function public.lock_receipt_item_fields_for_quality()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'kalite_ekibi') then
+    if new.product_id is distinct from old.product_id
+      or new.quantity is distinct from old.quantity
+      or new.unit is distinct from old.unit
+      or new.lot_no is distinct from old.lot_no
+      or new.skt is distinct from old.skt
+      or new.line_no is distinct from old.line_no
+      or new.receipt_id is distinct from old.receipt_id
+    then
+      raise exception 'Kalite ekibi sadece uygunluk ve not alanlarını değiştirebilir';
+    end if;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists lock_receipt_item_fields_for_quality_trigger on receipt_items;
+create trigger lock_receipt_item_fields_for_quality_trigger
+  before update on receipt_items
+  for each row execute procedure public.lock_receipt_item_fields_for_quality();
