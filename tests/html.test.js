@@ -11,4 +11,12 @@ describe('escapeHtml', () => {
   it('düz metni değiştirmeden döner', () => {
     expect(escapeHtml('Ahmet Yılmaz')).toBe('Ahmet Yılmaz');
   });
+
+  it('çift ve tek tırnak karakterlerini escape eder (attribute context için)', () => {
+    const result = escapeHtml('He said "hi" and \'bye\'');
+    expect(result).not.toContain('"');
+    expect(result).not.toContain("'");
+    expect(result).toContain('&quot;');
+    expect(result).toContain('&#39;');
+  });
 });
