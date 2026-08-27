@@ -12,23 +12,45 @@ export async function renderKaliteOnay(container) {
   const pending = await listPendingQuality();
   container.innerHTML = `
     <h2>Kalite Onayı Bekleyen Kayıtlar</h2>
+    <p id="list-msg" style="color:#b00020;"></p>
     <ul id="pending-list" style="list-style:none;padding:0;"></ul>
     <div id="detail-panel"></div>
   `;
 
   const list = container.querySelector('#pending-list');
-  if (pending.length === 0) {
-    list.innerHTML = '<li>Bekleyen kayıt yok.</li>';
-  }
-  list.innerHTML = pending
-    .map((r) => `<li style="padding:0.5rem;border-bottom:1px solid #eee;">
+  fillList(pending);
+
+  function fillList(records) {
+    if (records.length === 0) {
+      list.innerHTML = '<li>Bekleyen kayıt yok.</li>';
+      return;
+    }
+    list.innerHTML = records
+      .map((r) => `<li style="padding:0.5rem;border-bottom:1px solid #eee;">
       <button data-open="${escapeHtml(r.id)}">${escapeHtml(r.receipt_date)} — ${escapeHtml(r.companies.name)} (İrsaliye: ${escapeHtml(r.irsaliye_no || '-')})</button>
     </li>`)
-    .join('');
+      .join('');
 
-  list.querySelectorAll('[data-open]').forEach((btn) => {
-    btn.addEventListener('click', () => renderDetail(btn.dataset.open));
-  });
+    list.querySelectorAll('[data-open]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const listMsg = container.querySelector('#list-msg');
+        listMsg.textContent = '';
+        try {
+          await renderDetail(btn.dataset.open);
+        } catch (err) {
+          listMsg.textContent = 'Detay yüklenemedi: ' + err.message;
+        }
+      });
+    });
+  }
+
+  // Finalize sonrası tüm sayfayı yeniden render etmek yerine sadece bekleyen listeyi tazeler:
+  // böylece #detail-panel'deki başarı mesajı kullanıcı okumadan silinmez ve router'ın render
+  // kuşağı (generation) korumasının dışına çıkılmaz.
+  async function refreshPendingList() {
+    const records = await listPendingQuality();
+    fillList(records);
+  }
 
   async function renderDetail(receiptId) {
     const { receipt, items } = await getReceiptDetail(receiptId);
@@ -67,22 +89,50 @@ export async function renderKaliteOnay(container) {
       <p id="detail-msg"></p>
     `;
 
+    const msg = panel.querySelector('#detail-msg');
+
+    // Son bilinen (veritabanına yazıldığı doğrulanmış) değerler: yazma başarısız olursa kontrolü
+    // buraya geri alıyoruz, yoksa ekranda yazılmamış bir değer duruyormuş gibi görünür.
+    const lastGood = new Map();
+    items.forEach((item) => {
+      lastGood.set(item.id, { uygunluk: item.uygunluk, note: item.note || '' });
+    });
+
+    // Satır bazlı yazmalar önceden "fire and forget" idi: ağ hatası veya RLS reddi sessizce
+    // kayboluyordu (unhandled rejection) ve kullanıcı kaydedildiğini sanıyordu.
+    async function saveItem(itemId, uygunluk, note) {
+      msg.textContent = '';
+      try {
+        await updateItemUygunluk(itemId, uygunluk, note);
+        lastGood.set(itemId, { uygunluk, note });
+        msg.style.color = 'green';
+        msg.textContent = 'Kaydedildi.';
+      } catch (err) {
+        const prev = lastGood.get(itemId) || { uygunluk: 'beklemede', note: '' };
+        const sel = panel.querySelector(`select[data-item="${CSS.escape(itemId)}"][data-field="uygunluk"]`);
+        const input = panel.querySelector(`input[data-item="${CSS.escape(itemId)}"][data-field="note"]`);
+        if (sel) sel.value = prev.uygunluk;
+        if (input) input.value = prev.note;
+        msg.style.color = '#b00020';
+        msg.textContent = 'Hata: ' + err.message;
+      }
+    }
+
     panel.querySelectorAll('select[data-field="uygunluk"]').forEach((sel) => {
-      sel.addEventListener('change', () => updateItemUygunluk(sel.dataset.item, sel.value, currentNote(sel.dataset.item)));
+      sel.addEventListener('change', () => saveItem(sel.dataset.item, sel.value, currentNote(sel.dataset.item)));
     });
     panel.querySelectorAll('input[data-field="note"]').forEach((input) => {
-      input.addEventListener('change', () => updateItemUygunluk(input.dataset.item, currentUygunluk(input.dataset.item), input.value));
+      input.addEventListener('change', () => saveItem(input.dataset.item, currentUygunluk(input.dataset.item), input.value));
     });
 
     function currentNote(itemId) {
-      return panel.querySelector(`input[data-item="${itemId}"][data-field="note"]`).value;
+      return panel.querySelector(`input[data-item="${CSS.escape(itemId)}"][data-field="note"]`).value;
     }
     function currentUygunluk(itemId) {
-      return panel.querySelector(`select[data-item="${itemId}"][data-field="uygunluk"]`).value;
+      return panel.querySelector(`select[data-item="${CSS.escape(itemId)}"][data-field="uygunluk"]`).value;
     }
 
     async function finalize(decision) {
-      const msg = panel.querySelector('#detail-msg');
       try {
         await finalizeQuality(receiptId, {
           decision,
@@ -91,10 +141,17 @@ export async function renderKaliteOnay(container) {
         });
         msg.style.color = 'green';
         msg.textContent = decision === 'onaylandi' ? 'Kayıt onaylandı.' : 'Kayıt reddedildi.';
-        renderKaliteOnay(container);
       } catch (err) {
         msg.style.color = '#b00020';
         msg.textContent = 'Hata: ' + err.message;
+        return;
+      }
+      // Buraya kadar geldiysek finalize başarılı; listenin tazelenememesi ölümcül değil.
+      try {
+        await refreshPendingList();
+      } catch (err) {
+        const listMsg = container.querySelector('#list-msg');
+        listMsg.textContent = 'Liste yenilenemedi: ' + err.message;
       }
     }
 

@@ -1,12 +1,18 @@
 import { listCompanies } from '../lib/companies.js';
 import { listProducts } from '../lib/products.js';
 import { renderSearchList } from '../components/search-list.js';
-import { createReceiptWithItems, submitForQuality } from '../lib/receipts.js';
-import { getCurrentProfile } from '../lib/auth.js';
+import { createReceiptWithItems } from '../lib/receipts.js';
+import { getCurrentProfile, hasRole } from '../lib/auth.js';
 import { escapeHtml } from '../lib/html.js';
 
 export async function renderYeniKabul(container) {
-  const [companies, products, profile] = await Promise.all([listCompanies(), listProducts(), getCurrentProfile()]);
+  const profile = await getCurrentProfile();
+  if (!hasRole(profile, 'depo_yonetici')) {
+    container.innerHTML = '<p>Bu sayfa sadece depo yöneticisi rolüne açıktır.</p>';
+    return;
+  }
+
+  const [companies, products] = await Promise.all([listCompanies(), listProducts()]);
 
   const state = { companyId: null, items: [] };
 
@@ -96,18 +102,26 @@ export async function renderYeniKabul(container) {
 
   async function save(sendToQuality) {
     const msg = container.querySelector('#kabul-msg');
+    const buttons = [container.querySelector('#save-draft-btn'), container.querySelector('#submit-quality-btn')];
     msg.textContent = '';
+    // Çift gönderim engeli: yavaş bir kayıt sırasında ikinci bir tıklama ikinci bir kayıt yaratmasın.
+    buttons.forEach((btn) => { btn.disabled = true; });
     try {
       if (!state.companyId) throw new Error('Lütfen bir firma seçin');
-      const receiptId = await createReceiptWithItems({
+      if (state.items.some((item) => !(item.quantity > 0))) {
+        throw new Error('Tüm satırların miktarı 0\'dan büyük olmalı');
+      }
+      // RPC tek çağrıda hem kaydı hem satırları oluşturur, sendToQuality ise aynı transaction
+      // içinde kalite onayına gönderir (öksüz taslak kalmaz).
+      await createReceiptWithItems({
         companyId: state.companyId,
         receiptDate: container.querySelector('#kabul-tarih').value,
         irsaliyeNo: container.querySelector('#kabul-irsaliye').value,
         siparisNo: container.querySelector('#kabul-siparis').value,
         receivedBy: profile.id,
-        items: state.items
+        items: state.items,
+        submitToQuality: sendToQuality
       });
-      if (sendToQuality) await submitForQuality(receiptId);
       msg.style.color = 'green';
       msg.textContent = sendToQuality ? 'Kaydedildi ve kalite onayına gönderildi.' : 'Taslak olarak kaydedildi.';
       state.items = [];
@@ -117,6 +131,8 @@ export async function renderYeniKabul(container) {
     } catch (err) {
       msg.style.color = '#b00020';
       msg.textContent = 'Hata: ' + err.message;
+    } finally {
+      buttons.forEach((btn) => { btn.disabled = false; });
     }
   }
 

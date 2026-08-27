@@ -25,7 +25,7 @@ async function renderApp() {
         <button data-nav="/">Ana Sayfa</button>
         <button data-nav="/firmalar">Firmalar</button>
         <button data-nav="/urunler">Ürünler</button>
-        <button data-nav="/yeni-kabul">Yeni Mal Kabul</button>
+        ${profile.role === 'depo_yonetici' ? '<button data-nav="/yeni-kabul">Yeni Mal Kabul</button>' : ''}
         ${profile.role === 'kalite_ekibi' ? '<button data-nav="/kalite-onay">Kalite Onayı</button>' : ''}
       </nav>
       <main id="page-content" style="padding:1rem;"></main>
@@ -40,6 +40,11 @@ async function renderApp() {
 
     const pageContent = app.querySelector('#page-content');
     registerRoute('/', (c) => {
+      // Ana sayfadaki kısayol da nav ile aynı role kuralına tabi.
+      if (profile.role !== 'depo_yonetici') {
+        c.innerHTML = '';
+        return;
+      }
       c.innerHTML = '<p><button data-nav="/yeni-kabul">+ Yeni Mal Kabul</button></p>';
       c.querySelector('[data-nav]').addEventListener('click', () => navigate('/yeni-kabul'));
     });
