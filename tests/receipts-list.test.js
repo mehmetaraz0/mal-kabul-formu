@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const receiptsQuery = {
   select: vi.fn(function () { return this; }),
@@ -26,6 +26,13 @@ vi.mock('../src/lib/supabase.js', () => ({
 import { listReceipts } from '../src/lib/receipts.js';
 
 describe('listReceipts', () => {
+  beforeEach(() => {
+    // Çağrı geçmişini sıfırlıyoruz ki her testte "hiç çağrılmadı" / "şu argümanla çağrıldı"
+    // iddiaları önceki testlerin birikmiş çağrılarından etkilenmesin. vi.clearAllMocks() sadece
+    // çağrı kaydını temizler, vi.fn(...) ile verilen varsayılan implementasyonları korur.
+    vi.clearAllMocks();
+  });
+
   it('filtresiz çağrıldığında tüm kayıtları döner', async () => {
     const result = await listReceipts({});
     expect(result).toHaveLength(1);
@@ -41,6 +48,33 @@ describe('listReceipts', () => {
   it('ürün filtresi verildiğinde önce receipt_items sorgulanır', async () => {
     await listReceipts({ productId: 5 });
     expect(itemsQuery.eq).toHaveBeenCalledWith('product_id', 5);
+    expect(receiptsQuery.in).toHaveBeenCalledWith('id', ['r1']);
+  });
+
+  it('ürün filtresine eşleşen kayıt yoksa .in() hiç çağrılmadan boş dizi döner', async () => {
+    itemsQuery.eq.mockResolvedValueOnce({ data: [], error: null });
+    const result = await listReceipts({ productId: 999 });
+    expect(result).toEqual([]);
+    // Regresyon koruması: erken dönüş korumasi kaldırılırsa kod .in('id', []) çağırmaya
+    // başlar — bu iddia o durumu yakalar.
+    expect(receiptsQuery.in).not.toHaveBeenCalled();
+  });
+
+  it('sadece status verildiğinde eq("status", ...) çağrılır', async () => {
+    await listReceipts({ status: 'onaylandi' });
+    expect(receiptsQuery.eq).toHaveBeenCalledWith('status', 'onaylandi');
+  });
+
+  it('sadece companyId verildiğinde eq("company_id", ...) çağrılır', async () => {
+    await listReceipts({ companyId: 5 });
+    expect(receiptsQuery.eq).toHaveBeenCalledWith('company_id', 5);
+  });
+
+  it('birden fazla filtre birlikte verildiğinde hiçbiri kaybolmadan uygulanır', async () => {
+    await listReceipts({ companyId: 5, status: 'kalite_bekliyor', productId: 1 });
+    expect(itemsQuery.eq).toHaveBeenCalledWith('product_id', 1);
+    expect(receiptsQuery.eq).toHaveBeenCalledWith('company_id', 5);
+    expect(receiptsQuery.eq).toHaveBeenCalledWith('status', 'kalite_bekliyor');
     expect(receiptsQuery.in).toHaveBeenCalledWith('id', ['r1']);
   });
 });
