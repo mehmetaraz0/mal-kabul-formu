@@ -1,3 +1,4 @@
+import './style-print.css';
 import { getCurrentProfile, onAuthStateChange, signOut } from './lib/auth.js';
 import { renderLogin } from './pages/login.js';
 import { renderFirmalar } from './pages/firmalar.js';
@@ -5,6 +6,7 @@ import { renderUrunler } from './pages/urunler.js';
 import { renderYeniKabul } from './pages/yeni-kabul.js';
 import { renderKaliteOnay } from './pages/kalite-onay.js';
 import { renderArama } from './pages/arama.js';
+import { renderMalKabulCiktisi } from './pages/mal-kabul-ciktisi.js';
 import { escapeHtml } from './lib/html.js';
 import { registerRoute, startRouter, navigate } from './router.js';
 
@@ -55,6 +57,7 @@ async function renderApp() {
     registerRoute('/yeni-kabul', renderYeniKabul);
     registerRoute('/kalite-onay', renderKaliteOnay);
     registerRoute('/arama', renderArama);
+    registerRoute('/mal-kabul-ciktisi', renderMalKabulCiktisi);
     startRouter(pageContent);
   } catch (err) {
     app.innerHTML = `<p style="color:#b00020;padding:1rem;">Bir hata oluştu: ${escapeHtml(err.message)}</p>`;
