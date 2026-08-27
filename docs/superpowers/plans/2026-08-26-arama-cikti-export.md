@@ -505,7 +505,182 @@ git commit -m "feat: router'a query-string desteği ekle"
 
 ---
 
-### Task 5: Yazdırılabilir / PDF Mal Kabul Çıktısı (13 Satır/Sayfa)
+### Task 5: Mal Kabul Formu Alan Genişletmesi (Fatura No, Araç Kontrolü, Ürün Sıcaklığı, Yarı Ömür)
+
+**Bağlam:** Kullanıcı gerçek "MAL KABUL FORMU" belgesini (gürok Turizm Grubu, Doküman No: F.22) paylaştı. Şu ana kadarki şemada karşılığı olmayan alanlar tespit edildi. Bu görev, çıktı tasarımından (Task 6) önce bu alanları veritabanına ve giriş formuna ekler.
+
+**Gerçek form → şema eşlemesi:**
+- Tarih, Firma Adı, İrsaliye No, Parti No (`lot_no`), Malzeme Adı, SKT, Açıklama (`note`) → zaten mevcut.
+- **Fatura No** → yeni, `receipts.fatura_no` (İrsaliye No'dan ayrı bir alan).
+- **Araç Hijyeni / Araç Sıcaklığı** → yeni, receipt (sevkiyat) başına bir kez: `receipts.arac_hijyen_uygun` (boolean), `receipts.arac_sicaklik` (numeric).
+- **Yarı Ömrünü Geçmiş mi?** → yeni, ürün satırı başına: `receipt_items.yari_omur_gecti` (boolean, varsayılan false).
+- **Ürün Sıcaklığı** → yeni, ürün satırı başına: `receipt_items.urun_sicakligi` (numeric).
+- **MKK** (kullanıcı tanımı: "mal kabul kriteri uygun ise +") → **yeni bir sütun gerekmiyor**, mevcut `uygunluk` alanının çıktıdaki karşılığı: `uygun` → "+", `uygun_degil` → `note` metni, `beklemede` → boş.
+
+**Files:**
+- Create: `supabase/migrations/0008_mal_kabul_form_alanlari.sql`
+- Modify: `src/lib/receipts.js` (`createReceiptWithItems` imzası + RPC çağrısı, `getReceiptDetail` select listesi)
+- Modify: `src/pages/yeni-kabul.js` (form alanları: Fatura No, Araç Hijyeni, Araç Sıcaklığı; satır başına: Ürün Sıcaklığı, Yarı Ömür Geçti mi)
+- Modify: `src/pages/kalite-onay.js` (bu alanları salt-okunur gösterir — kalite ekibi karar verirken görsün diye)
+- Test: `tests/receipts.test.js` güncellemesi
+
+**Interfaces:**
+- `createReceiptWithItems`'ın seçenek nesnesi 3 yeni alan alır: `faturaNo`, `aracHijyenUygun`, `aracSicaklik`; `items` dizisindeki her öğe artık `urunSicakligi` ve `yariOmurGecti` de taşıyabilir.
+
+- [ ] **Step 1: `supabase/migrations/0008_mal_kabul_form_alanlari.sql` yaz**
+
+```sql
+-- 0008_mal_kabul_form_alanlari.sql
+alter table receipts add column fatura_no text;
+alter table receipts add column arac_hijyen_uygun boolean;
+alter table receipts add column arac_sicaklik numeric(5,2);
+
+alter table receipt_items add column urun_sicakligi numeric(5,2);
+alter table receipt_items add column yari_omur_gecti boolean not null default false;
+
+-- ÖNEMLİ: 0007'deki 8 parametreli create_receipt_with_items'a 3 yeni parametre eklendiği için
+-- (Task 1/4'te öğrenilen ders) eski imzayı önce açıkça düşürüyoruz, yoksa "function is not unique" hatası alınır.
+drop function if exists create_receipt_with_items(bigint, date, text, text, uuid, text, jsonb, boolean);
+
+create or replace function create_receipt_with_items(
+  p_company_id bigint,
+  p_receipt_date date,
+  p_irsaliye_no text,
+  p_siparis_no text,
+  p_received_by uuid,
+  p_client_uuid text,
+  p_items jsonb,
+  p_submit_to_quality boolean default false,
+  p_fatura_no text default null,
+  p_arac_hijyen_uygun boolean default null,
+  p_arac_sicaklik numeric default null
+) returns uuid
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_receipt_id uuid;
+begin
+  if jsonb_array_length(p_items) = 0 then
+    raise exception 'En az bir ürün satırı gerekli';
+  end if;
+
+  insert into receipts (
+    client_uuid, company_id, receipt_date, irsaliye_no, siparis_no, received_by, status,
+    fatura_no, arac_hijyen_uygun, arac_sicaklik
+  )
+  values (
+    p_client_uuid, p_company_id, p_receipt_date, p_irsaliye_no, p_siparis_no, p_received_by, 'taslak',
+    p_fatura_no, p_arac_hijyen_uygun, p_arac_sicaklik
+  )
+  returning id into v_receipt_id;
+
+  insert into receipt_items (
+    receipt_id, product_id, line_no, lot_no, skt, quantity, unit, uygunluk,
+    urun_sicakligi, yari_omur_gecti
+  )
+  select
+    v_receipt_id,
+    (item->>'productId')::bigint,
+    (item->>'lineNo')::int,
+    item->>'lotNo',
+    nullif(item->>'skt', '')::date,
+    (item->>'quantity')::numeric,
+    item->>'unit',
+    'beklemede',
+    nullif(item->>'urunSicakligi', '')::numeric,
+    coalesce((item->>'yariOmurGecti')::boolean, false)
+  from jsonb_array_elements(p_items) as item;
+
+  if p_submit_to_quality then
+    update receipts set status = 'kalite_bekliyor' where id = v_receipt_id;
+  end if;
+
+  return v_receipt_id;
+end;
+$$;
+
+revoke execute on function create_receipt_with_items(bigint, date, text, text, uuid, text, jsonb, boolean, text, boolean, numeric) from public;
+grant execute on function create_receipt_with_items(bigint, date, text, text, uuid, text, jsonb, boolean, text, boolean, numeric) to authenticated;
+```
+
+- [ ] **Step 2: `src/lib/receipts.js`'i güncelle — `createReceiptWithItems` yeni alanları RPC'ye geçirsin**
+
+`createReceiptWithItems`'ın parametre nesnesine `faturaNo`, `aracHijyenUygun`, `aracSicaklik` ekle; `items.map(...)` içine `urunSicakligi: item.urunSicakligi ?? null, yariOmurGecti: item.yariOmurGecti ?? false` ekle; `supabase.rpc(...)` çağrısına `p_fatura_no: faturaNo || null, p_arac_hijyen_uygun: aracHijyenUygun ?? null, p_arac_sicaklik: aracSicaklik ?? null` ekle.
+
+- [ ] **Step 3: `getReceiptDetail`'i genişlet — yeni alanlar + Task 6'nın çıktı ekranının ihtiyaç duyduğu firma/personel isimleri**
+
+`src/lib/receipts.js`'teki `getReceiptDetail`'i şu hale getir (yeni alanlar VE firma/personel isim join'leri bir arada):
+
+```javascript
+export async function getReceiptDetail(receiptId) {
+  const { data: receipt, error: receiptError } = await supabase
+    .from('receipts')
+    .select(`
+      id, company_id, receipt_date, irsaliye_no, siparis_no, status, received_by, quality_by, quality_note,
+      fatura_no, arac_hijyen_uygun, arac_sicaklik,
+      companies (name),
+      received_profile:profiles!receipts_received_by_fkey (full_name),
+      quality_profile:profiles!receipts_quality_by_fkey (full_name)
+    `)
+    .eq('id', receiptId)
+    .single();
+  if (receiptError) throw receiptError;
+
+  const { data: items, error: itemsError } = await supabase
+    .from('receipt_items')
+    .select('id, product_id, lot_no, skt, quantity, unit, uygunluk, note, urun_sicakligi, yari_omur_gecti, products (code, name)')
+    .eq('receipt_id', receiptId);
+  if (itemsError) throw itemsError;
+
+  return {
+    receipt: {
+      ...receipt,
+      companyName: receipt.companies?.name,
+      receivedByName: receipt.received_profile?.full_name,
+      qualityByName: receipt.quality_profile?.full_name
+    },
+    items
+  };
+}
+```
+
+(Not: `profiles!receipts_received_by_fkey` / `profiles!receipts_quality_by_fkey` Supabase'in Plan 1'deki `references profiles(id)` tanımından otomatik ürettiği kısıtlama adlarına dayanır; Supabase SQL Editor'de `select conname from pg_constraint where conrelid = 'receipts'::regclass;` ile doğrula, farklıysa güncelle.)
+
+Bu değişiklik `kalite-onay.js`'in `getReceiptDetail`'i çağıran `renderDetail` fonksiyonunun `receipt` nesnesindeki alanlarla uyumlu kalmasını gerektirir — mevcut kullanım (`receipt.irsaliye_no`, `receipt.siparis_no` vb.) bozulmaz, sadece yeni alanlar eklenir.
+
+- [ ] **Step 4: `src/pages/yeni-kabul.js`'e yeni form alanlarını ekle**
+
+Başlık alanlarına (Tarih/İrsaliye/Sipariş No'nun yanına) ekle:
+- `<input type="text" id="kabul-fatura" placeholder="Fatura No" />`
+- `<select id="kabul-arac-hijyen"><option value="">Araç Hijyeni —</option><option value="true">Uygun</option><option value="false">Uygun Değil</option></select>`
+- `<input type="number" step="0.1" id="kabul-arac-sicaklik" placeholder="Araç Sıcaklığı (°C)" />`
+
+Satır tablosuna (`renderItemsBody`) iki sütun daha ekle: "Ürün Sıcaklığı" (`<input type="number" step="0.1" data-field="urunSicakligi">`) ve "Yarı Ömür Geçti mi" (`<input type="checkbox" data-field="yariOmurGecti">`, checkbox olduğu için `input` event yerine `change` event ve `.checked` okunmalı). Yeni satır eklenirken `state.items.push({..., urunSicakligi: '', yariOmurGecti: false})`. `save()` fonksiyonunda `createReceiptWithItems`'a bu üç yeni başlık alanını da geçir (`faturaNo: ...value, aracHijyenUygun: ...value === '' ? null : ...value === 'true', aracSicaklik: ...value ? Number(...value) : null`).
+
+Tablodaki `item.code`/`item.name` gibi DB kaynaklı metinler zaten `escapeHtml()` ile kaçışlanıyordu (Plan 3'te yapıldı) — bu iki yeni sütun sayısal/boolean değerler olduğu için ek kaçışlama gerekmez, ama mevcut satırdaki escapeHtml çağrılarını bozmadığından emin ol.
+
+- [ ] **Step 5: `src/pages/kalite-onay.js`'in detay görünümüne bu alanları salt-okunur ekle**
+
+Detay başlığına (İrsaliye/Sipariş No satırının yanına) `Araç Hijyeni: ${receipt.arac_hijyen_uygun === null ? '-' : receipt.arac_hijyen_uygun ? 'Uygun' : 'Uygun Değil'} — Araç Sıcaklığı: ${receipt.arac_sicaklik ?? '-'}°C` ekle (kalite ekibinin karar verirken görmesi için, düzenlenemez). Satır tablosuna "Ürün Sıcaklığı" ve "Yarı Ömür Geçti mi" sütunlarını salt metin olarak ekle (`item.urun_sicakligi ?? '-'`, `item.yari_omur_gecti ? 'Evet' : 'Hayır'`).
+
+- [ ] **Step 6: Testleri güncelle, çalıştır, commit et**
+
+`tests/receipts.test.js`'teki `createReceiptWithItems` testlerini yeni parametrelerin RPC'ye doğru geçtiğini doğrulayacak şekilde güncelle. `npm run test` ve `npm run build` çalıştır, temiz olduğunu doğrula.
+
+```bash
+git add supabase/migrations/0008_mal_kabul_form_alanlari.sql src/lib/receipts.js src/pages/yeni-kabul.js src/pages/kalite-onay.js tests/receipts.test.js
+git commit -m "feat: fatura no, arac kontrolu, urun sicakligi ve yari omur alanlarini ekle"
+```
+
+---
+
+### Task 6: Yazdırılabilir / PDF Mal Kabul Çıktısı — Gerçek Forma Birebir Uygun
+
+**Bağlam:** Kullanıcının paylaştığı gerçek "MAL KABUL FORMU" (gürok Turizm Grubu, Doküman No: F.22) belgesi artık elde — bu görev artık genel bir varsayım değil, o belgenin **birebir sütun sırasına ve içeriğine** göre tasarlanır. Sayfa başına 13 satır kuralı (kullanıcının kendi talebi) korunur; gerçek belgenin tam satır/sayfa sayısı görselden belirlenemediği için bu varsayım geçerliliğini korur.
+
+**Gerçek formun sütun sırası (soldan sağa):** Tarih | Firma Adı | Fatura No | İrsaliye No | Seri No/Parti No | Araç: Hijyen | Araç: Sıcaklık | Malzeme Adı | SKT | Yarı Ömrünü Geçmiş mi? | Ürün Sıcaklığı | Kg. | Adet | MKK | Açıklama | İmzalar. (Kağıt formda Tarih/Firma Adı/Fatura No/İrsaliye No/Araç bilgisi her satırda tekrarlanır çünkü kağıt üzerinde tek bir "başlık" alanı yok — bu çıktıda da aynı şekilde her satırda tekrarlanacak.)
 
 **Files:**
 - Create: `src/pages/mal-kabul-ciktisi.js`
@@ -514,7 +689,7 @@ git commit -m "feat: router'a query-string desteği ekle"
 - Modify: `package.json` (yeni bağımlılık)
 
 **Interfaces:**
-- Consumes: `getReceiptDetail` (Plan 3), `getQueryParam` (Task 4), `paginateRows` (Task 1).
+- Consumes: `getReceiptDetail` (Task 5'te genişletildi), `getQueryParam` (Task 4), `paginateRows`/`ROWS_PER_PAGE` (Task 1), `escapeHtml` (Plan 1).
 - Produces: `/mal-kabul-ciktisi` rotası — Task 3'teki "Çıktı" butonunun hedefi.
 
 - [ ] **Step 1: `html2pdf.js` bağımlılığını ekle**
@@ -524,7 +699,7 @@ git commit -m "feat: router'a query-string desteği ekle"
 Run: `npm install`
 Expected: `node_modules/html2pdf.js` klasörü oluşur.
 
-- [ ] **Step 2: `src/style-print.css` oluştur**
+- [ ] **Step 2: `src/style-print.css` oluştur (yatay/A4 landscape — gerçek formun genişliğine uyacak şekilde)**
 
 ```css
 @media screen {
@@ -532,15 +707,16 @@ Expected: `node_modules/html2pdf.js` klasörü oluşur.
 }
 
 @media print {
+  @page { size: A4 landscape; margin: 10mm; }
   header, nav, .no-print { display: none !important; }
   .print-only { display: block; }
   .print-page {
     page-break-after: always;
-    padding: 1cm;
   }
   .print-page:last-child { page-break-after: auto; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { border: 1px solid #333; padding: 4px 6px; font-size: 11px; }
+  th, td { border: 1px solid #333; padding: 2px 3px; font-size: 8px; text-align: center; }
+  th { font-size: 8px; }
 }
 
 .print-header {
@@ -548,26 +724,63 @@ Expected: `node_modules/html2pdf.js` klasörü oluşur.
   justify-content: space-between;
   align-items: center;
   border-bottom: 2px solid #333;
-  padding-bottom: 8px;
-  margin-bottom: 8px;
+  padding-bottom: 6px;
+  margin-bottom: 6px;
 }
-.print-header img { max-height: 60px; }
-.print-footer {
+.print-header img { max-height: 40px; }
+.print-title { text-align: center; font-weight: bold; font-size: 16px; }
+.print-doc-footer {
   display: flex;
   justify-content: space-between;
-  margin-top: 16px;
-  font-size: 12px;
+  font-size: 9px;
+  color: #555;
+  margin-top: 4px;
+}
+.print-legend {
+  font-size: 8px;
+  margin-top: 8px;
+  line-height: 1.4;
+}
+.print-signoff {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 12px;
+  font-size: 11px;
 }
 ```
 
-- [ ] **Step 3: `src/pages/mal-kabul-ciktisi.js` yaz**
+- [ ] **Step 3: `src/pages/mal-kabul-ciktisi.js` yaz — gerçek "MAL KABUL FORMU" (Doküman No: F.22) sütun sırasıyla**
 
 ```javascript
 import { getReceiptDetail } from '../lib/receipts.js';
 import { getQueryParam } from '../router.js';
 import { paginateRows, ROWS_PER_PAGE } from '../lib/pagination.js';
+import { escapeHtml } from '../lib/html.js';
 
-const UYGUNLUK_LABELS = { uygun: 'Uygun', uygun_degil: 'Uygun Değil', beklemede: 'Beklemede' };
+// Kullanıcının paylaştığı gerçek forma ait doküman kontrol bilgileri (Doküman No:F.22,
+// Yayın Tarihi:15.02.2026, Rev.Tarihi/No:/00). Form revize edilirse burası güncellenir.
+const DOC_NO = 'F.22';
+const DOC_YAYIN_TARIHI = '15.02.2026';
+const DOC_REV = '/00';
+
+const RISK_LEGEND = `
+  <strong>1. Derece riskli ürünler:</strong> Tüm et ve et ürünleri, sakatat ürünleri, balık ve deniz hayvanları ürünleri, kümes hayvanları ürünleri, pasta kreması, yumurta.
+  <strong>2. Derece riskli ürünler:</strong> Dondurulmuş meyve sebze, konserve, katı ve sıvı yağlar.
+  <strong>3. Derece riskli ürünler:</strong> Turşular, kuru gıda, baharat, bal, corn flakes, marmelat, reçel, pekmez, zeytin, tahin, bakliyat.
+  <strong>4. Derece riskli ürünler:</strong> Sebze, meyve.
+  <br/><strong>Alerjen gıdalar:</strong> Gluten içeren tahıllar, kabuklular, yumurta, balık, kerevit, hardal, susam tohumu, kükürt dioksit, sülfitler, acı bakla, yumuşakçalar.
+`;
+
+function evetHayirYokBilgi(value) {
+  if (value === null || value === undefined) return '-';
+  return value ? 'Uygun' : 'Uygun Değil';
+}
+
+function mkkHucresi(item) {
+  if (item.uygunluk === 'uygun') return '+';
+  if (item.uygunluk === 'uygun_degil') return escapeHtml(item.note || 'Uygun Değil');
+  return '-';
+}
 
 export async function renderMalKabulCiktisi(container) {
   const receiptId = getQueryParam('id');
@@ -584,47 +797,66 @@ export async function renderMalKabulCiktisi(container) {
       (pageItems, pageIndex) => `
     <div class="print-page">
       <div class="print-header">
-        <div>
-          <img src="/logo.png" alt="Logo" onerror="this.style.display='none'" />
-        </div>
-        <div>
-          <h2 style="margin:0;">MAL KABUL FORMU</h2>
-          <div>Firma: <strong>${receipt.companyName}</strong></div>
-          <div>Tarih: ${receipt.receipt_date} — İrsaliye No: ${receipt.irsaliye_no || '-'} — Sipariş No: ${receipt.siparis_no || '-'}</div>
-        </div>
+        <img src="/logo.png" alt="Logo" onerror="this.style.display='none'" />
+        <div class="print-title">MAL KABUL FORMU</div>
         <div>Sayfa ${pageIndex + 1} / ${pages.length}</div>
       </div>
       <table>
         <thead>
-          <tr><th>Sıra</th><th>Ürün Kodu</th><th>Ürün Adı</th><th>Lot No</th><th>SKT</th><th>Miktar</th><th>Birim</th><th>Uygunluk</th></tr>
+          <tr>
+            <th>Tarih</th><th>Firma Adı</th><th>Fatura No</th><th>İrsaliye No</th>
+            <th>Seri No/<br/>Parti No</th><th>Araç<br/>Hijyen</th><th>Araç<br/>Sıcaklık</th>
+            <th>Malzeme Adı</th><th>SKT</th><th>Yarı Ömrünü<br/>Geçmiş mi?</th>
+            <th>Ürün<br/>Sıcaklığı</th><th>Kg.</th><th>Adet</th><th>MKK</th>
+            <th>Açıklama</th><th>İmzalar</th>
+          </tr>
         </thead>
         <tbody>
           ${pageItems
             .map(
-              (item, i) => `
+              (item) => `
             <tr>
-              <td>${pageIndex * ROWS_PER_PAGE + i + 1}</td>
-              <td>${item.products.code}</td>
-              <td>${item.products.name}</td>
-              <td>${item.lot_no || '-'}</td>
-              <td>${item.skt || '-'}</td>
-              <td>${item.quantity}</td>
-              <td>${item.unit}</td>
-              <td>${UYGUNLUK_LABELS[item.uygunluk] || item.uygunluk}</td>
+              <td>${escapeHtml(receipt.receipt_date)}</td>
+              <td>${escapeHtml(receipt.companyName)}</td>
+              <td>${escapeHtml(receipt.fatura_no || '-')}</td>
+              <td>${escapeHtml(receipt.irsaliye_no || '-')}</td>
+              <td>${escapeHtml(item.lot_no || '-')}</td>
+              <td>${evetHayirYokBilgi(receipt.arac_hijyen_uygun)}</td>
+              <td>${receipt.arac_sicaklik ?? '-'}</td>
+              <td>${escapeHtml(item.products.name)}</td>
+              <td>${escapeHtml(item.skt || '-')}</td>
+              <td>${item.yari_omur_gecti ? 'Evet' : 'Hayır'}</td>
+              <td>${item.urun_sicakligi ?? '-'}</td>
+              <td>${item.unit === 'kg' ? item.quantity : ''}</td>
+              <td>${item.unit === 'ad' ? item.quantity : ''}</td>
+              <td>${mkkHucresi(item)}</td>
+              <td>${escapeHtml(item.note || '-')}</td>
+              <td></td>
             </tr>`
             )
             .join('')}
-          ${Array.from({ length: ROWS_PER_PAGE - pageItems.length }, () => '<tr><td colspan="8">&nbsp;</td></tr>').join('')}
+          ${Array.from({ length: ROWS_PER_PAGE - pageItems.length }, () => '<tr><td colspan="16">&nbsp;</td></tr>').join('')}
         </tbody>
       </table>
+      <div class="print-doc-footer">
+        <div>Doküman No:${DOC_NO}</div>
+        <div>Yayın Tarihi:${DOC_YAYIN_TARIHI}</div>
+        <div>Rev.Tarihi/No:${DOC_REV}</div>
+      </div>
       ${
         pageIndex === pages.length - 1
-          ? `<div class="print-footer">
-              <div>Teslim Alan: ${receipt.receivedByName || '-'}</div>
-              <div>Kalite Kontrol: ${receipt.qualityByName || '-'}</div>
-              <div>Durum: ${receipt.status}</div>
+          ? `<div class="print-signoff">
+              <div>Teslim Alan: ${escapeHtml(receipt.receivedByName || '-')}</div>
+              <div>Kalite Kontrol: ${escapeHtml(receipt.qualityByName || '-')}</div>
+              <div>Durum: ${escapeHtml(receipt.status)}</div>
             </div>
-            <div>Kalite Notu: ${receipt.quality_note || '-'}</div>`
+            <div>Kalite Notu: ${escapeHtml(receipt.quality_note || '-')}</div>
+            <div class="print-legend">
+              <strong>Not:</strong> Denetim sırasında UYGUN görülen durumlar için ilgili kolona <strong>+</strong> yazılacaktır.
+              Denetim sırasında UYGUN OLMADIĞI görülen durumlar için ise uygunsuzluğun tanımı yapılacaktır.
+              Mal Kabul Kriterleri: Gıda malzemesinin uygunluğu için Hammadde Özellikleri Tablosu niteliklerine bakılır.
+              ${RISK_LEGEND}
+            </div>`
           : ''
       }
     </div>`
@@ -643,52 +875,16 @@ export async function renderMalKabulCiktisi(container) {
   container.querySelector('#pdf-btn').addEventListener('click', async () => {
     const html2pdf = (await import('html2pdf.js')).default;
     html2pdf()
-      .set({ filename: `mal-kabul-${receipt.receipt_date}-${receiptId.slice(0, 8)}.pdf`, margin: 0, jsPDF: { format: 'a4' } })
+      .set({ filename: `mal-kabul-${receipt.receipt_date}-${receiptId.slice(0, 8)}.pdf`, margin: 5, jsPDF: { format: 'a4', orientation: 'landscape' } })
       .from(container.querySelector('#print-area'))
       .save();
   });
 }
 ```
 
-- [ ] **Step 4: `getReceiptDetail` çıktısına isim alanlarını ekle (Plan 3'te oluşturulan fonksiyonu genişlet)**
+**Not:** `mkkHucresi` ve `escapeHtml(item.note || '-')` bilerek AYNI notu iki farklı sütunda (MKK ve Açıklama) gösterebilir — gerçek formda MKK "kritere uygunluk" işareti, Açıklama ise serbest not alanıdır; `uygun_degil` durumunda ikisi de aynı açıklamayı taşıması kabul edilebilir bir sadeleştirmedir (ayrı bir "MKK notu" alanı şu an şemada yok).
 
-`src/lib/receipts.js` içindeki `getReceiptDetail` fonksiyonunu, çıktı ekranının ihtiyaç duyduğu firma/personel isimlerini de dönecek şekilde güncelle:
-
-```javascript
-export async function getReceiptDetail(receiptId) {
-  const { data: receipt, error: receiptError } = await supabase
-    .from('receipts')
-    .select(`
-      id, company_id, receipt_date, irsaliye_no, siparis_no, status, received_by, quality_by, quality_note,
-      companies (name),
-      received_profile:profiles!receipts_received_by_fkey (full_name),
-      quality_profile:profiles!receipts_quality_by_fkey (full_name)
-    `)
-    .eq('id', receiptId)
-    .single();
-  if (receiptError) throw receiptError;
-
-  const { data: items, error: itemsError } = await supabase
-    .from('receipt_items')
-    .select('id, product_id, lot_no, skt, quantity, unit, uygunluk, note, products (code, name)')
-    .eq('receipt_id', receiptId);
-  if (itemsError) throw itemsError;
-
-  return {
-    receipt: {
-      ...receipt,
-      companyName: receipt.companies?.name,
-      receivedByName: receipt.received_profile?.full_name,
-      qualityByName: receipt.quality_profile?.full_name
-    },
-    items
-  };
-}
-```
-
-(Not: `profiles!receipts_received_by_fkey` ve `profiles!receipts_quality_by_fkey` ifadeleri Supabase'in otomatik oluşturduğu foreign key kısıtlama adlarına dayanır; Postgres varsayılan adlandırması `receipts_received_by_fkey` / `receipts_quality_by_fkey` şeklindedir çünkü Plan 1'deki migration'da bu sütunlar `references profiles(id)` ile tanımlandı. Supabase SQL Editor'de `select conname from pg_constraint where conrelid = 'receipts'::regclass;` çalıştırarak gerçek kısıtlama adlarını doğrula; farklıysa bu iki satırı gerçek adlarla güncelle.)
-
-- [ ] **Step 5: `src/main.js`'e rota, CSS import ve `html2pdf.js` bağlantısını ekle**
+- [ ] **Step 4: `src/main.js`'e rota, CSS import ve `html2pdf.js` bağlantısını ekle**
 
 Dosyanın en üstüne CSS import ekle:
 
@@ -704,29 +900,30 @@ import { renderMalKabulCiktisi } from './pages/mal-kabul-ciktisi.js';
   registerRoute('/mal-kabul-ciktisi', renderMalKabulCiktisi);
 ```
 
-- [ ] **Step 6: `public/logo.png` için placeholder not bırak**
+- [ ] **Step 5: `public/logo.png` için placeholder not bırak**
 
-`public/logo.png` dosyası henüz yok — `onerror="this.style.display='none'"` sayesinde dosya yoksa logo alanı sessizce gizlenir, sayfa hata vermez. Gerçek logo dosyası elde edildiğinde bu path'e (`public/logo.png`) eklenmesi yeterlidir, kod değişikliği gerekmez.
+`public/logo.png` dosyası henüz yok — `onerror="this.style.display='none'"` sayesinde dosya yoksa logo alanı sessizce gizlenir, sayfa hata vermez. "gürok Turizm Grubu" logosu elde edildiğinde bu path'e (`public/logo.png`) eklenmesi yeterlidir, kod değişikliği gerekmez.
 
-- [ ] **Step 7: Tarayıcıda uçtan uca doğrula**
+- [ ] **Step 6: Tarayıcıda uçtan uca doğrula**
 
-1. `npm run dev`, "Kayıt Ara"ya git, bir kayıt bul, "Çıktı"ya bas.
+1. `npm run dev`, "Kayıt Ara"ya git, Task 5'te yeni alanları (Fatura No, Araç Hijyeni/Sıcaklığı, Ürün Sıcaklığı, Yarı Ömür) doldurulmuş bir kayıt bul, "Çıktı"ya bas.
 2. 13'ten fazla ürün satırı olan bir test kaydı oluştur (Yeni Mal Kabul'den 15 satır ekleyip kaydet) ve onun çıktısını aç.
 
-Expected: Ekranda kayıt formatlı görünür, sayfa numarası "Sayfa 1/2" ve "Sayfa 2/2" görünür, her sayfa 13 satır (boş satırlarla doldurulmuş) gösterir, alt bilgi (Teslim Alan/Kalite Kontrol) sadece son sayfada görünür. "Yazdır"a basınca tarayıcı yazdırma önizlemesinde menü/nav görünmez. "PDF İndir"e basınca bir `.pdf` dosyası iner ve iki sayfa içerir.
+Expected: Ekranda 16 sütunlu (Tarih...İmzalar) tablo gerçek formun sırasıyla görünür, Tarih/Firma Adı/Fatura No/İrsaliye No her satırda tekrarlanır, MKK sütunu uygun satırlarda "+", uygun olmayanlarda açıklama gösterir, sayfa numarası "Sayfa 1/2" ve "Sayfa 2/2" görünür, her sayfa 13 satır (boş satırlarla doldurulmuş) gösterir, doküman kontrol bilgisi (Doküman No/Yayın Tarihi/Rev.Tarihi) her sayfada, imza/kalite notu/risk derecesi lejantı sadece son sayfada görünür. "Yazdır"a basınca tarayıcı yazdırma önizlemesi yatay (landscape) açılır, menü/nav görünmez. "PDF İndir"e basınca yatay yönlü bir `.pdf` dosyası iner.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add src/pages/mal-kabul-ciktisi.js src/style-print.css src/lib/receipts.js src/main.js package.json
-git commit -m "feat: 13 satir/sayfa yazdirilabilir mal kabul ciktisi ve PDF indirme"
+git add src/pages/mal-kabul-ciktisi.js src/style-print.css src/main.js package.json
+git commit -m "feat: gercek Mal Kabul Formu (F.22) sablonuna birebir uyan yazdirilabilir cikti"
 ```
 
 ---
 
 ## Bu Plan Tamamlandığında Doğrulanacaklar
 
-- `npm run test` yeşil (csv, pagination, receipts-list, router testleri dahil).
+- `npm run test` yeşil (csv, pagination, receipts-list, router, receipts testleri dahil).
 - Arama sayfası firma/tarih aralığı/durum filtreleriyle çalışıyor, sonuçlar CSV olarak inebiliyor.
-- Herhangi bir kayıt için "Çıktı" ekranı 13 satır/sayfa kuralına göre bölünmüş, yazdırılabilir ve PDF olarak indirilebilir bir çıktı üretiyor.
-- **Açık takip konusu:** Kullanıcı gerçek Mal Kabul Formu şablonunu (logo + kesin sütun/satır yerleşimi) paylaştığında, `src/pages/mal-kabul-ciktisi.js` ve `src/style-print.css` o şablona birebir uyacak şekilde revize edilmeli.
+- Mal kabul giriş formu artık Fatura No, Araç Hijyeni/Sıcaklığı, Ürün Sıcaklığı ve Yarı Ömür alanlarını da alıyor; kalite onay ekranı bunları salt-okunur gösteriyor.
+- Herhangi bir kayıt için "Çıktı" ekranı gerçek "MAL KABUL FORMU" (Doküman No: F.22) şablonunun sütun sırasına birebir uyan, 13 satır/sayfa kuralına göre bölünmüş, yatay (landscape) yazdırılabilir ve PDF olarak indirilebilir bir çıktı üretiyor.
+- **Kalan açık nokta:** Gerçek "gürok Turizm Grubu" logosu henüz `public/logo.png` olarak eklenmedi — sadece görsel, işlevi etkilemiyor (logo yoksa alan sessizce gizleniyor).
