@@ -4,6 +4,7 @@ import { renderFirmalar } from './pages/firmalar.js';
 import { renderUrunler } from './pages/urunler.js';
 import { renderYeniKabul } from './pages/yeni-kabul.js';
 import { renderKaliteOnay } from './pages/kalite-onay.js';
+import { renderArama } from './pages/arama.js';
 import { escapeHtml } from './lib/html.js';
 import { registerRoute, startRouter, navigate } from './router.js';
 
@@ -27,6 +28,7 @@ async function renderApp() {
         <button data-nav="/urunler">Ürünler</button>
         ${profile.role === 'depo_yonetici' ? '<button data-nav="/yeni-kabul">Yeni Mal Kabul</button>' : ''}
         ${profile.role === 'kalite_ekibi' ? '<button data-nav="/kalite-onay">Kalite Onayı</button>' : ''}
+        <button data-nav="/arama">Kayıt Ara</button>
       </nav>
       <main id="page-content" style="padding:1rem;"></main>
     `;
@@ -52,6 +54,7 @@ async function renderApp() {
     registerRoute('/urunler', renderUrunler);
     registerRoute('/yeni-kabul', renderYeniKabul);
     registerRoute('/kalite-onay', renderKaliteOnay);
+    registerRoute('/arama', renderArama);
     startRouter(pageContent);
   } catch (err) {
     app.innerHTML = `<p style="color:#b00020;padding:1rem;">Bir hata oluştu: ${escapeHtml(err.message)}</p>`;
