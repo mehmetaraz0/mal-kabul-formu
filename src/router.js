@@ -15,9 +15,9 @@ export function _resetRoutes() {
 }
 
 export function navigate(path) {
-  const current = window.location.hash.slice(1) || '/';
-  if (path !== current) suppressNextHashChange = true;
+  const before = window.location.hash;
   window.location.hash = path;
+  if (window.location.hash !== before) suppressNextHashChange = true;
   renderCurrent();
 }
 

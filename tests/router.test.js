@@ -55,4 +55,23 @@ describe('router', () => {
     expect(renderFn).toHaveBeenCalledTimes(2);
     expect(renderFn).toHaveBeenLastCalledWith(container2);
   });
+
+  it('navigate("/") location.hash zaten boşken (ilk yükleme) render fonksiyonunu iki kez çağırmaz', () => {
+    // location.hash === '' iken navigate('/') çağrıldığında normalize edilmiş path karşılaştırması
+    // ('/' === '/') bir değişiklik göremez, ama window.location.hash = '/' ataması gerçek hash'i
+    // '' -> '#/' olarak DEĞİŞTİRİR ve gerçek bir hashchange olayı fırlatır. navigate() artık
+    // atamadan önce/sonra GÖZLEMLENEN hash değerini karşılaştırıyor, path string'i tahmin etmiyor.
+    const container = document.createElement('div');
+    const homeFn = vi.fn();
+    // Rota, startRouter()'dan SONRA kaydediliyor ki startRouter'ın kendi ilk renderCurrent()
+    // çağrısı (hash boşken varsayılan '/' rotasına düşer) henüz eşleşen bir renderFn bulamasın —
+    // böylece aşağıdaki sayaç sadece navigate('/') çağrısının etkisini ölçer.
+    startRouter(container);
+    registerRoute('/', homeFn);
+    navigate('/');
+    expect(homeFn).toHaveBeenCalledTimes(1);
+    // Tarayıcının navigate()'ten sonra sırayla göndereceği asenkron hashchange olayını simüle et.
+    window.dispatchEvent(new Event('hashchange'));
+    expect(homeFn).toHaveBeenCalledTimes(1);
+  });
 });
