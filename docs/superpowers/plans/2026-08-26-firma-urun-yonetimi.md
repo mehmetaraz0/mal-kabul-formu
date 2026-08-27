@@ -91,9 +91,15 @@ Expected: FAIL — `router.js` bulunamadı.
 
 - [ ] **Step 3: `src/router.js` yaz**
 
+**Not (Plan 2 final review'da güncellendi — iki fix turu sonrası nihai hali):** İlk taslak, `navigate()`'in render'ı senkron tetiklemesi + `hashchange`'in aynı render'ı asenkron tekrar tetiklemesi yüzünden çift render veriyordu. İlk fix (bir `lastRenderedPath` guard'ı) çift render'ı önledi ama daha ciddi bir hataya yol açtı: `main.js` her `renderApp()` çağrısında **yeni bir container** ile `startRouter()`'ı tekrar çağırıyor (örn. çıkış yapıp tekrar giriş yapınca), ve `lastRenderedPath` container'dan bağımsız modül state'i olduğu için, aynı path'e (örn. `/firmalar`) dönen bir kullanıcı **kalıcı boş ekranla** karşılaşıyordu — üstelik "aktif menüye tekrar tıklama artık no-op" hatası yüzünden kendi kendine kurtaramıyordu. Doğru çözüm: path hafızası tutmak yerine, sadece `navigate()`'in kendi tetiklediği `hashchange` olayını "yankı" olarak bastırmak. Bu aynı zamanda asenkron route handler hatalarını (offline, RLS reddi vb.) görünür bir hataya çevirir ve yarışan (birbirini yarıda kesen) navigasyonlardan kalan eski bir render'ın DOM'a yazmasını engeller (bir "render generation" sayacıyla).
+
 ```javascript
+import { escapeHtml } from './lib/html.js';
+
 const routes = new Map();
 let rootContainer = null;
+let suppressNextHashChange = false;
+let renderGeneration = 0;
 
 export function registerRoute(path, renderFn) {
   routes.set(path, renderFn);
@@ -101,22 +107,40 @@ export function registerRoute(path, renderFn) {
 
 export function _resetRoutes() {
   routes.clear();
+  suppressNextHashChange = false;
 }
 
 export function navigate(path) {
+  const current = window.location.hash.slice(1) || '/';
+  if (path !== current) suppressNextHashChange = true;
   window.location.hash = path;
+  renderCurrent();
+}
+
+function onHashChange() {
+  if (suppressNextHashChange) {
+    suppressNextHashChange = false;
+    return;
+  }
+  renderCurrent();
 }
 
 function renderCurrent() {
   if (!rootContainer) return;
   const path = window.location.hash.slice(1) || '/';
   const renderFn = routes.get(path) || routes.get('/');
-  if (renderFn) renderFn(rootContainer);
+  if (!renderFn) return;
+  const container = rootContainer;
+  const myGeneration = ++renderGeneration;
+  Promise.resolve(renderFn(container)).catch((err) => {
+    if (myGeneration !== renderGeneration) return; // bu render artık eski, ekrana yazma
+    container.innerHTML = `<p style="color:#b00020;padding:1rem;">Bir hata oluştu: ${escapeHtml(err.message)}</p>`;
+  });
 }
 
 export function startRouter(container) {
   rootContainer = container;
-  window.addEventListener('hashchange', renderCurrent);
+  window.addEventListener('hashchange', onHashChange);
   renderCurrent();
 }
 ```
@@ -614,6 +638,135 @@ Expected: 63 ürün listelenir (ET ve BALIK karışık, isme göre sıralı), "s
 ```bash
 git add src/lib/products.js src/pages/urunler.js src/main.js tests/products.test.js
 git commit -m "feat: ürün kataloğu listesi, arama ve yeni ürün ekleme sayfası"
+```
+
+---
+
+### Task 4: Final Review Bulgularının Düzeltilmesi
+
+Bu görev, Task 1-3 tamamlandıktan sonra yapılan bütün-plan (final) code review'da bulunan Critical/Important bulguları kapatır: router'ın çift-render düzeltmesinin (Task 1) yol açtığı kalıcı boş ekran hatası zaten Task 1 Step 3'te düzeltildi (yukarı bakın); bu görev geri kalanları kapatır.
+
+**Files:**
+- Modify: `tests/router.test.js`
+- Modify: `src/pages/firmalar.js`
+- Modify: `src/pages/urunler.js`
+- Create: `supabase/migrations/0005_created_by_varsayilan.sql`
+
+**Interfaces:**
+- Consumes: Task 1'in güncellenmiş `router.js`'i (yukarıda), Task 2/3'teki `companies.js`/`products.js`.
+
+- [ ] **Step 1: `tests/router.test.js`'e yeni bir regresyon testi ekle (Critical bulgu: startRouter iki farklı container ile çağrıldığında ikinci render atlanıyordu)**
+
+Mevcut `describe('router', ...)` bloğunun içine, son testin altına ekle:
+
+```javascript
+  it('startRouter farklı bir container ile tekrar çağrıldığında yeniden render eder (çıkış/tekrar giriş senaryosu)', () => {
+    const container1 = document.createElement('div');
+    const container2 = document.createElement('div');
+    const renderFn = vi.fn();
+    registerRoute('/firmalar', renderFn);
+    window.location.hash = '/firmalar';
+
+    startRouter(container1);
+    expect(renderFn).toHaveBeenCalledTimes(1);
+    expect(renderFn).toHaveBeenLastCalledWith(container1);
+
+    startRouter(container2);
+    expect(renderFn).toHaveBeenCalledTimes(2);
+    expect(renderFn).toHaveBeenLastCalledWith(container2);
+  });
+```
+
+- [ ] **Step 2: Testi çalıştır, doğrula**
+
+Run: `npm run test`
+Expected: PASS (yeni test dahil tüm router testleri).
+
+- [ ] **Step 3: `src/pages/firmalar.js`'i güncelle — çakışan isim hatasını Türkçeleştir, başarı mesajını render'dan sonra göster**
+
+`addBox.querySelector('#firma-add-form').addEventListener('submit', ...)` handler'ını şuna güncelle:
+
+```javascript
+  addBox.querySelector('#firma-add-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = addBox.querySelector('#new-firma-name');
+    const name = input.value;
+    try {
+      await addCompany(name);
+      input.value = '';
+      await renderFirmalar(container);
+      const msg = container.querySelector('#firma-msg');
+      msg.style.color = 'green';
+      msg.textContent = 'Firma eklendi.';
+    } catch (err) {
+      const msg = container.querySelector('#firma-msg');
+      msg.style.color = '#b00020';
+      msg.textContent = err.code === '23505' ? 'Hata: Bu firma zaten kayıtlı.' : 'Hata: ' + err.message;
+    }
+  });
+```
+
+(Not: `renderFirmalar(container)` artık `await` ile bekleniyor ve başarı mesajı YENİDEN render edilmiş DOM üzerinde, o render bittikten SONRA yazılıyor — önceki halinde mesaj `renderFirmalar`'ın senkron `container.innerHTML = ...` satırı tarafından aynı tick içinde sessizce siliniyordu ve kullanıcı hiçbir zaman görmüyordu.)
+
+- [ ] **Step 4: `src/pages/urunler.js`'e aynı düzeltmeyi uygula**
+
+`addBox.querySelector('#urun-add-form').addEventListener('submit', ...)` handler'ını aynı desenle güncelle:
+
+```javascript
+  addBox.querySelector('#urun-add-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await addProduct({
+        code: addBox.querySelector('#new-urun-code').value,
+        name: addBox.querySelector('#new-urun-name').value,
+        unit: addBox.querySelector('#new-urun-unit').value,
+        category: addBox.querySelector('#new-urun-category').value
+      });
+      await renderUrunler(container);
+      const msg = container.querySelector('#urun-msg');
+      msg.style.color = 'green';
+      msg.textContent = 'Ürün eklendi.';
+    } catch (err) {
+      const msg = container.querySelector('#urun-msg');
+      msg.style.color = '#b00020';
+      msg.textContent = err.code === '23505' ? 'Hata: Bu ürün kodu zaten kayıtlı.' : 'Hata: ' + err.message;
+    }
+  });
+```
+
+- [ ] **Step 5: `supabase/migrations/0005_created_by_varsayilan.sql` yaz (Important bulgu: created_by hiçbir zaman doldurulmuyordu)**
+
+```sql
+-- 0005_created_by_varsayilan.sql
+-- companies.created_by ve products.created_by hiçbir insert kodu tarafından set edilmiyordu ve
+-- şemada varsayılan değer yoktu — bu yüzden UI'dan eklenen her firma/ürün kalıcı olarak
+-- created_by = NULL kalıyordu (geriye dönük doldurulamaz bir veri kaybı). auth.uid()'i varsayılan
+-- yapmak, hangi kod yolundan insert edilirse edilsin (bugünkü UI, ileride eklenecek herhangi bir
+-- başka yol) created_by'ın doğru kullanıcıya otomatik ayarlanmasını sağlar.
+alter table companies alter column created_by set default auth.uid();
+alter table products alter column created_by set default auth.uid();
+```
+
+- [ ] **Step 6: Migration'ı Supabase SQL Editor'de çalıştır (manuel)**
+
+Expected: Hata yok.
+
+- [ ] **Step 7: Tüm testleri ve build'i çalıştır**
+
+Run: `npm run test && npm run build`
+Expected: Tümü yeşil/temiz.
+
+- [ ] **Step 8: Tarayıcıda doğrula (mümkünse gerçek Supabase'e karşı)**
+
+1. Var olan bir firma adıyla tekrar firma eklemeyi dene → "Hata: Bu firma zaten kayıtlı." mesajı görünmeli (ham Postgres hatası değil).
+2. Yeni bir firma ekle → liste yenilendikten SONRA yeşil "Firma eklendi." mesajı görünmeli.
+3. Supabase Table Editor'de yeni eklenen firma/ürün satırının `created_by` sütununun dolu (test kullanıcısının UUID'si) olduğunu doğrula.
+
+- [ ] **Step 9: Commit**
+
+```bash
+git add tests/router.test.js src/pages/firmalar.js src/pages/urunler.js supabase/migrations/0005_created_by_varsayilan.sql
+git commit -m "fix: final review bulgularını kapat - router regresyon testi, çakışan kayıt mesajı, başarı mesajı zamanlaması, created_by varsayılanı"
 ```
 
 ---
