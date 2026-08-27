@@ -121,7 +121,14 @@ export async function renderMalKabulCiktisi(container) {
   container.querySelector('#pdf-btn').addEventListener('click', async () => {
     const html2pdf = (await import('html2pdf.js')).default;
     html2pdf()
-      .set({ filename: `mal-kabul-${receipt.receipt_date}-${receiptId.slice(0, 8)}.pdf`, margin: 5, jsPDF: { format: 'a4', orientation: 'landscape' } })
+      .set({
+        filename: `mal-kabul-${receipt.receipt_date}-${receiptId.slice(0, 8)}.pdf`,
+        margin: 5,
+        jsPDF: { format: 'a4', orientation: 'landscape' },
+        // .print-page bölümlerinin sayfa sınırlarıyla eşleşmesi için computed style'a
+        // (page-break-after) ek olarak açıkça de belirtiyoruz.
+        pagebreak: { mode: 'css', after: '.print-page' }
+      })
       .from(container.querySelector('#print-area'))
       .save();
   });

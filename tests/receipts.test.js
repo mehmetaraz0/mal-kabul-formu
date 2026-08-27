@@ -48,9 +48,11 @@ vi.mock('../src/lib/supabase.js', () => {
         insert: vi.fn(() => Promise.resolve({ error: null })),
         update,
         select: vi.fn(() => ({
-          eq: vi.fn(() => Promise.resolve({
-            data: [{ id: 'i1', product_id: 1, lot_no: 'L1', skt: '2026-09-01', quantity: 10, unit: 'kg', uygunluk: 'beklemede', note: null, urun_sicakligi: 2.1, yari_omur_gecti: false, products: { code: 'YIY01000001', name: 'DANA' } }],
-            error: null
+          eq: vi.fn(() => ({
+            order: vi.fn(() => Promise.resolve({
+              data: [{ id: 'i1', line_no: 1, product_id: 1, lot_no: 'L1', skt: '2026-09-01', quantity: 10, unit: 'kg', uygunluk: 'beklemede', note: null, urun_sicakligi: 2.1, yari_omur_gecti: false, products: { code: 'YIY01000001', name: 'DANA' } }],
+              error: null
+            }))
           }))
         }))
       };

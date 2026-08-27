@@ -89,8 +89,9 @@ export async function getReceiptDetail(receiptId) {
 
   const { data: items, error: itemsError } = await supabase
     .from('receipt_items')
-    .select('id, product_id, lot_no, skt, quantity, unit, uygunluk, note, urun_sicakligi, yari_omur_gecti, products (code, name)')
-    .eq('receipt_id', receiptId);
+    .select('id, line_no, product_id, lot_no, skt, quantity, unit, uygunluk, note, urun_sicakligi, yari_omur_gecti, products (code, name)')
+    .eq('receipt_id', receiptId)
+    .order('line_no');
   if (itemsError) throw itemsError;
 
   return {

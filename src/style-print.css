@@ -2,17 +2,25 @@
   .print-only { display: none; }
 }
 
+/* html2pdf.js (html2canvas) clones the live DOM under SCREEN media, not print
+   media — so any styling that must appear in the downloaded PDF (table
+   borders/font/width, page-break rules) has to apply unconditionally, not
+   just inside @media print. @media print is still used for the few things
+   that are genuinely print-only (hiding chrome, @page sizing for the
+   browser's own print dialog — html2pdf handles its own page sizing via the
+   jsPDF options passed in mal-kabul-ciktisi.js). */
+#print-area table { width: 100%; border-collapse: collapse; }
+#print-area th, #print-area td { border: 1px solid #333; padding: 2px 3px; font-size: 8px; text-align: center; }
+#print-area th { font-size: 8px; }
+.print-page {
+  page-break-after: always;
+}
+.print-page:last-child { page-break-after: auto; }
+
 @media print {
   @page { size: A4 landscape; margin: 10mm; }
   header, nav, .no-print { display: none !important; }
   .print-only { display: block; }
-  .print-page {
-    page-break-after: always;
-  }
-  .print-page:last-child { page-break-after: auto; }
-  table { width: 100%; border-collapse: collapse; }
-  th, td { border: 1px solid #333; padding: 2px 3px; font-size: 8px; text-align: center; }
-  th { font-size: 8px; }
 }
 
 .print-header {
