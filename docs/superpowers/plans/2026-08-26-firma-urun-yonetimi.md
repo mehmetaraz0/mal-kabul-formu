@@ -111,9 +111,15 @@ export function _resetRoutes() {
 }
 
 export function navigate(path) {
-  const current = window.location.hash.slice(1) || '/';
-  if (path !== current) suppressNextHashChange = true;
+  // Bastırmayı, path karşılaştırmasını TAHMİN ederek değil, hash'in GERÇEKTEN değişip
+  // değişmediğini gözlemleyerek karar veriyoruz — path karşılaştırması ('/' vs '' gibi
+  // normalize edilmiş biçimler farklı ama tarayıcının ürettiği hash aynı olduğunda, ya da
+  // path URL-encode gerektirdiğinde) hashchange'in gerçekte tetiklenip tetiklenmeyeceğini
+  // yanlış tahmin edip ya çift render'a ya da bir sonraki gerçek hashchange'in (örn. geri
+  // tuşu) yanlışlıkla yutulmasına yol açabiliyordu (final review'da bulundu).
+  const before = window.location.hash;
   window.location.hash = path;
+  if (window.location.hash !== before) suppressNextHashChange = true;
   renderCurrent();
 }
 
