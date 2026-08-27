@@ -25,7 +25,18 @@ vi.mock('../src/lib/supabase.js', () => {
               error: null
             })),
             single: vi.fn(() => Promise.resolve({
-              data: { id: 'r1', company_id: 1, status: 'kalite_bekliyor' },
+              data: {
+                id: 'r1',
+                company_id: 1,
+                status: 'kalite_bekliyor',
+                irsaliye_no: 'IRS-1',
+                fatura_no: 'FAT-1',
+                arac_hijyen_uygun: true,
+                arac_sicaklik: 3.2,
+                companies: { name: 'TEST FIRMA' },
+                received_profile: { full_name: 'Depo Yöneticisi' },
+                quality_profile: { full_name: 'Kalite Kişisi' }
+              },
               error: null
             }))
           }))
@@ -38,7 +49,7 @@ vi.mock('../src/lib/supabase.js', () => {
         update,
         select: vi.fn(() => ({
           eq: vi.fn(() => Promise.resolve({
-            data: [{ id: 'i1', product_id: 1, lot_no: 'L1', skt: '2026-09-01', quantity: 10, unit: 'kg', uygunluk: 'beklemede', note: null, products: { code: 'YIY01000001', name: 'DANA' } }],
+            data: [{ id: 'i1', product_id: 1, lot_no: 'L1', skt: '2026-09-01', quantity: 10, unit: 'kg', uygunluk: 'beklemede', note: null, urun_sicakligi: 2.1, yari_omur_gecti: false, products: { code: 'YIY01000001', name: 'DANA' } }],
             error: null
           }))
         }))
@@ -85,6 +96,43 @@ describe('receipts', () => {
     expect(callArgs.p_items[0].productId).toBe(1);
   });
 
+  it('createReceiptWithItems urunSicakligi/yariOmurGecti verilmezse varsayılan null/false gönderir', async () => {
+    await createReceiptWithItems({ ...baseArgs, items: validItems });
+    const item = supabase.rpc.mock.calls[0][1].p_items[0];
+    expect(item.urunSicakligi).toBeNull();
+    expect(item.yariOmurGecti).toBe(false);
+  });
+
+  it('createReceiptWithItems satır başına urunSicakligi/yariOmurGecti değerlerini RPC\'ye geçirir', async () => {
+    const items = [{ productId: 1, lotNo: 'L1', skt: '2026-09-01', quantity: 10, unit: 'kg', urunSicakligi: 4.5, yariOmurGecti: true }];
+    await createReceiptWithItems({ ...baseArgs, items });
+    const item = supabase.rpc.mock.calls[0][1].p_items[0];
+    expect(item.urunSicakligi).toBe(4.5);
+    expect(item.yariOmurGecti).toBe(true);
+  });
+
+  it('createReceiptWithItems faturaNo/aracHijyenUygun/aracSicaklik verilmezse null gönderir', async () => {
+    await createReceiptWithItems({ ...baseArgs, items: validItems });
+    const callArgs = supabase.rpc.mock.calls[0][1];
+    expect(callArgs.p_fatura_no).toBeNull();
+    expect(callArgs.p_arac_hijyen_uygun).toBeNull();
+    expect(callArgs.p_arac_sicaklik).toBeNull();
+  });
+
+  it('createReceiptWithItems faturaNo/aracHijyenUygun/aracSicaklik değerlerini RPC\'ye geçirir', async () => {
+    await createReceiptWithItems({
+      ...baseArgs,
+      items: validItems,
+      faturaNo: 'FAT-1',
+      aracHijyenUygun: true,
+      aracSicaklik: 3.2
+    });
+    const callArgs = supabase.rpc.mock.calls[0][1];
+    expect(callArgs.p_fatura_no).toBe('FAT-1');
+    expect(callArgs.p_arac_hijyen_uygun).toBe(true);
+    expect(callArgs.p_arac_sicaklik).toBe(3.2);
+  });
+
   it('createReceiptWithItems varsayılan olarak p_submit_to_quality=false gönderir', async () => {
     await createReceiptWithItems({ ...baseArgs, items: validItems });
     expect(supabase.rpc.mock.calls[0][1].p_submit_to_quality).toBe(false);
@@ -118,6 +166,18 @@ describe('receipts', () => {
     const result = await getReceiptDetail('r1');
     expect(result.receipt.status).toBe('kalite_bekliyor');
     expect(result.items).toHaveLength(1);
+  });
+
+  it('getReceiptDetail yeni alanları (fatura_no, arac_hijyen_uygun, arac_sicaklik) ve isim join\'lerini döner', async () => {
+    const result = await getReceiptDetail('r1');
+    expect(result.receipt.fatura_no).toBe('FAT-1');
+    expect(result.receipt.arac_hijyen_uygun).toBe(true);
+    expect(result.receipt.arac_sicaklik).toBe(3.2);
+    expect(result.receipt.companyName).toBe('TEST FIRMA');
+    expect(result.receipt.receivedByName).toBe('Depo Yöneticisi');
+    expect(result.receipt.qualityByName).toBe('Kalite Kişisi');
+    expect(result.items[0].urun_sicakligi).toBe(2.1);
+    expect(result.items[0].yari_omur_gecti).toBe(false);
   });
 
   it('finalizeQuality tüm satırlar işaretlenmeden onaylandi kabul etmez', async () => {

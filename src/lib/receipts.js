@@ -17,7 +17,10 @@ export async function createReceiptWithItems({
   receivedBy,
   items,
   clientUuid,
-  submitToQuality = false
+  submitToQuality = false,
+  faturaNo,
+  aracHijyenUygun,
+  aracSicaklik
 }) {
   // Veritabanı da (0007) boş diziyi reddediyor; bu kontrol daha hızlı ve okunaklı bir hata verir.
   if (!items || items.length === 0) throw new Error('En az bir ürün satırı gerekli');
@@ -37,9 +40,14 @@ export async function createReceiptWithItems({
       lotNo: item.lotNo || null,
       skt: item.skt || null,
       quantity: item.quantity,
-      unit: item.unit
+      unit: item.unit,
+      urunSicakligi: item.urunSicakligi ?? null,
+      yariOmurGecti: item.yariOmurGecti ?? false
     })),
-    p_submit_to_quality: submitToQuality
+    p_submit_to_quality: submitToQuality,
+    p_fatura_no: faturaNo || null,
+    p_arac_hijyen_uygun: aracHijyenUygun ?? null,
+    p_arac_sicaklik: aracSicaklik ?? null
   });
   if (error) throw error;
   return data;
@@ -68,18 +76,32 @@ export async function listPendingQuality() {
 export async function getReceiptDetail(receiptId) {
   const { data: receipt, error: receiptError } = await supabase
     .from('receipts')
-    .select('id, company_id, receipt_date, irsaliye_no, siparis_no, status, received_by, quality_by, quality_note')
+    .select(`
+      id, company_id, receipt_date, irsaliye_no, siparis_no, status, received_by, quality_by, quality_note,
+      fatura_no, arac_hijyen_uygun, arac_sicaklik,
+      companies (name),
+      received_profile:profiles!receipts_received_by_fkey (full_name),
+      quality_profile:profiles!receipts_quality_by_fkey (full_name)
+    `)
     .eq('id', receiptId)
     .single();
   if (receiptError) throw receiptError;
 
   const { data: items, error: itemsError } = await supabase
     .from('receipt_items')
-    .select('id, product_id, lot_no, skt, quantity, unit, uygunluk, note, products (code, name)')
+    .select('id, product_id, lot_no, skt, quantity, unit, uygunluk, note, urun_sicakligi, yari_omur_gecti, products (code, name)')
     .eq('receipt_id', receiptId);
   if (itemsError) throw itemsError;
 
-  return { receipt, items };
+  return {
+    receipt: {
+      ...receipt,
+      companyName: receipt.companies?.name,
+      receivedByName: receipt.received_profile?.full_name,
+      qualityByName: receipt.quality_profile?.full_name
+    },
+    items
+  };
 }
 
 export async function updateItemUygunluk(itemId, uygunluk, note) {

@@ -26,6 +26,15 @@ export async function renderYeniKabul(container) {
       <label>Tarih <input type="date" id="kabul-tarih" value="${new Date().toISOString().slice(0, 10)}" /></label>
       <label>İrsaliye No <input type="text" id="kabul-irsaliye" /></label>
       <label>Sipariş No <input type="text" id="kabul-siparis" /></label>
+      <label>Fatura No <input type="text" id="kabul-fatura" placeholder="Fatura No" /></label>
+      <label>Araç Hijyeni
+        <select id="kabul-arac-hijyen">
+          <option value="">Araç Hijyeni —</option>
+          <option value="true">Uygun</option>
+          <option value="false">Uygun Değil</option>
+        </select>
+      </label>
+      <label>Araç Sıcaklığı (°C) <input type="number" step="0.1" id="kabul-arac-sicaklik" placeholder="Araç Sıcaklığı (°C)" /></label>
     </div>
 
     <h3>Ürün Ekle</h3>
@@ -34,7 +43,7 @@ export async function renderYeniKabul(container) {
     <table id="items-table" style="width:100%;border-collapse:collapse;margin-top:1rem;">
       <thead>
         <tr style="text-align:left;border-bottom:2px solid #333;">
-          <th>Ürün</th><th>Lot No</th><th>SKT</th><th>Miktar</th><th>Birim</th><th></th>
+          <th>Ürün</th><th>Lot No</th><th>SKT</th><th>Miktar</th><th>Birim</th><th>Ürün Sıcaklığı</th><th>Yarı Ömür Geçti mi</th><th></th>
         </tr>
       </thead>
       <tbody id="items-body"></tbody>
@@ -69,12 +78,21 @@ export async function renderYeniKabul(container) {
         <td><input type="date" data-field="skt" data-index="${i}" value="${escapeHtml(item.skt)}" /></td>
         <td><input type="number" min="0" step="0.01" data-field="quantity" data-index="${i}" value="${escapeHtml(item.quantity)}" style="width:80px;" /></td>
         <td>${escapeHtml(item.unit)}</td>
+        <td><input type="number" step="0.1" data-field="urunSicakligi" data-index="${i}" value="${escapeHtml(item.urunSicakligi)}" style="width:90px;" /></td>
+        <td><input type="checkbox" data-field="yariOmurGecti" data-index="${i}" ${item.yariOmurGecti ? 'checked' : ''} /></td>
         <td><button data-remove="${i}">Sil</button></td>
       </tr>`
       )
       .join('');
 
-    tbody.querySelectorAll('input').forEach((input) => {
+    tbody.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+      input.addEventListener('change', () => {
+        const idx = Number(input.dataset.index);
+        const field = input.dataset.field;
+        state.items[idx][field] = input.checked;
+      });
+    });
+    tbody.querySelectorAll('input:not([type="checkbox"])').forEach((input) => {
       input.addEventListener('input', () => {
         const idx = Number(input.dataset.index);
         const field = input.dataset.field;
@@ -95,7 +113,7 @@ export async function renderYeniKabul(container) {
     getKey: (p) => p.id,
     placeholder: 'Eklenecek ürünü ara...',
     onSelect: (p) => {
-      state.items.push({ productId: p.id, code: p.code, name: p.name, unit: p.unit, lotNo: '', skt: '', quantity: 0 });
+      state.items.push({ productId: p.id, code: p.code, name: p.name, unit: p.unit, lotNo: '', skt: '', quantity: 0, urunSicakligi: '', yariOmurGecti: false });
       renderItemsBody();
     }
   });
@@ -113,6 +131,8 @@ export async function renderYeniKabul(container) {
       }
       // RPC tek çağrıda hem kaydı hem satırları oluşturur, sendToQuality ise aynı transaction
       // içinde kalite onayına gönderir (öksüz taslak kalmaz).
+      const aracHijyenValue = container.querySelector('#kabul-arac-hijyen').value;
+      const aracSicaklikValue = container.querySelector('#kabul-arac-sicaklik').value;
       await createReceiptWithItems({
         companyId: state.companyId,
         receiptDate: container.querySelector('#kabul-tarih').value,
@@ -120,7 +140,10 @@ export async function renderYeniKabul(container) {
         siparisNo: container.querySelector('#kabul-siparis').value,
         receivedBy: profile.id,
         items: state.items,
-        submitToQuality: sendToQuality
+        submitToQuality: sendToQuality,
+        faturaNo: container.querySelector('#kabul-fatura').value,
+        aracHijyenUygun: aracHijyenValue === '' ? null : aracHijyenValue === 'true',
+        aracSicaklik: aracSicaklikValue ? Number(aracSicaklikValue) : null
       });
       msg.style.color = 'green';
       msg.textContent = sendToQuality ? 'Kaydedildi ve kalite onayına gönderildi.' : 'Taslak olarak kaydedildi.';

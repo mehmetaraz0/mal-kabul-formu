@@ -57,8 +57,9 @@ export async function renderKaliteOnay(container) {
     const panel = container.querySelector('#detail-panel');
     panel.innerHTML = `
       <h3>Detay — İrsaliye: ${escapeHtml(receipt.irsaliye_no || '-')} / Sipariş: ${escapeHtml(receipt.siparis_no || '-')}</h3>
+      <p>Araç Hijyeni: ${receipt.arac_hijyen_uygun === null ? '-' : receipt.arac_hijyen_uygun ? 'Uygun' : 'Uygun Değil'} — Araç Sıcaklığı: ${escapeHtml(receipt.arac_sicaklik ?? '-')}°C</p>
       <table style="width:100%;border-collapse:collapse;">
-        <thead><tr><th>Ürün</th><th>Lot No</th><th>SKT</th><th>Miktar</th><th>Uygunluk</th><th>Not</th></tr></thead>
+        <thead><tr><th>Ürün</th><th>Lot No</th><th>SKT</th><th>Miktar</th><th>Ürün Sıcaklığı</th><th>Yarı Ömür Geçti mi</th><th>Uygunluk</th><th>Not</th></tr></thead>
         <tbody>
           ${items
             .map(
@@ -68,6 +69,8 @@ export async function renderKaliteOnay(container) {
               <td>${escapeHtml(item.lot_no || '-')}</td>
               <td>${escapeHtml(item.skt || '-')}</td>
               <td>${escapeHtml(item.quantity)} ${escapeHtml(item.unit)}</td>
+              <td>${escapeHtml(item.urun_sicakligi ?? '-')}</td>
+              <td>${item.yari_omur_gecti ? 'Evet' : 'Hayır'}</td>
               <td>
                 <select data-item="${escapeHtml(item.id)}" data-field="uygunluk">
                   <option value="beklemede" ${item.uygunluk === 'beklemede' ? 'selected' : ''}>Beklemede</option>
