@@ -105,3 +105,31 @@ export async function finalizeQuality(receiptId, { decision, qualityBy, qualityN
   if (error) throw error;
   assertUpdated(data);
 }
+
+export async function listReceipts({ companyId, startDate, endDate, status, productId } = {}) {
+  let query = supabase
+    .from('receipts')
+    .select('id, receipt_date, irsaliye_no, siparis_no, status, companies (name)');
+
+  if (companyId) query = query.eq('company_id', companyId);
+  if (startDate) query = query.gte('receipt_date', startDate);
+  if (endDate) query = query.lte('receipt_date', endDate);
+  if (status) query = query.eq('status', status);
+
+  if (productId) {
+    const { data: itemRows, error: itemsError } = await supabase
+      .from('receipt_items')
+      .select('receipt_id')
+      .eq('product_id', productId);
+    if (itemsError) throw itemsError;
+    const receiptIds = [...new Set(itemRows.map((r) => r.receipt_id))];
+    // Eşleşen ürün satırı yoksa `.in('id', [])` PostgREST'e boş bir liste gönderir; bu davranış
+    // sürüme göre belirsiz olabileceğinden sorguyu hiç göndermeden doğrudan boş sonuç dönüyoruz.
+    if (receiptIds.length === 0) return [];
+    query = query.in('id', receiptIds);
+  }
+
+  const { data, error } = await query.order('receipt_date', { ascending: false });
+  if (error) throw error;
+  return data;
+}
