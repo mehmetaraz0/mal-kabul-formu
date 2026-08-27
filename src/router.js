@@ -29,9 +29,20 @@ function onHashChange() {
   renderCurrent();
 }
 
+function currentPathAndQuery() {
+  const full = window.location.hash.slice(1) || '/';
+  const [path, query = ''] = full.split('?');
+  return { path, query };
+}
+
+export function getQueryParam(name) {
+  const { query } = currentPathAndQuery();
+  return new URLSearchParams(query).get(name);
+}
+
 function renderCurrent() {
   if (!rootContainer) return;
-  const path = window.location.hash.slice(1) || '/';
+  const { path } = currentPathAndQuery();
   const renderFn = routes.get(path) || routes.get('/');
   if (!renderFn) return;
   const container = rootContainer;

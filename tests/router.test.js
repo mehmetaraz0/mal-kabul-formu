@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { registerRoute, navigate, startRouter, _resetRoutes } from '../src/router.js';
+import { registerRoute, navigate, startRouter, _resetRoutes, getQueryParam } from '../src/router.js';
 
 describe('router', () => {
   beforeEach(() => {
@@ -73,5 +73,33 @@ describe('router', () => {
     // Tarayıcının navigate()'ten sonra sırayla göndereceği asenkron hashchange olayını simüle et.
     window.dispatchEvent(new Event('hashchange'));
     expect(homeFn).toHaveBeenCalledTimes(1);
+  });
+
+  it('query string içeren bir path\'e navigate edildiğinde kayıtlı rota yine de eşleşir ve render fonksiyonu çağrılır', () => {
+    // renderCurrent artık route lookup için sadece path kısmını kullanıyor (query değil),
+    // bu yüzden '/some-route?foo=bar' hâlâ '/some-route' rotasına eşleşmeli.
+    const container = document.createElement('div');
+    const renderFn = vi.fn();
+    registerRoute('/some-route', renderFn);
+    startRouter(container);
+    navigate('/some-route?foo=bar');
+    expect(renderFn).toHaveBeenCalledWith(container);
+  });
+});
+
+describe('getQueryParam', () => {
+  beforeEach(() => {
+    _resetRoutes();
+    window.location.hash = '';
+  });
+
+  it('hash içindeki query stringden değeri okur', () => {
+    window.location.hash = '/mal-kabul-ciktisi?id=abc-123';
+    expect(getQueryParam('id')).toBe('abc-123');
+  });
+
+  it('query string yoksa null döner', () => {
+    window.location.hash = '/mal-kabul-ciktisi';
+    expect(getQueryParam('id')).toBeNull();
   });
 });
