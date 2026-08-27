@@ -2,6 +2,7 @@ import { getCurrentProfile, onAuthStateChange, signOut } from './lib/auth.js';
 import { renderLogin } from './pages/login.js';
 import { renderFirmalar } from './pages/firmalar.js';
 import { renderUrunler } from './pages/urunler.js';
+import { renderYeniKabul } from './pages/yeni-kabul.js';
 import { escapeHtml } from './lib/html.js';
 import { registerRoute, startRouter, navigate } from './router.js';
 
@@ -23,6 +24,7 @@ async function renderApp() {
         <button data-nav="/">Ana Sayfa</button>
         <button data-nav="/firmalar">Firmalar</button>
         <button data-nav="/urunler">Ürünler</button>
+        <button data-nav="/yeni-kabul">Yeni Mal Kabul</button>
       </nav>
       <main id="page-content" style="padding:1rem;"></main>
     `;
@@ -35,9 +37,13 @@ async function renderApp() {
     });
 
     const pageContent = app.querySelector('#page-content');
-    registerRoute('/', (c) => { c.innerHTML = '<p>Ana sayfa — sonraki planlarda mal kabul formu buraya eklenecek.</p>'; });
+    registerRoute('/', (c) => {
+      c.innerHTML = '<p><button data-nav="/yeni-kabul">+ Yeni Mal Kabul</button></p>';
+      c.querySelector('[data-nav]').addEventListener('click', () => navigate('/yeni-kabul'));
+    });
     registerRoute('/firmalar', renderFirmalar);
     registerRoute('/urunler', renderUrunler);
+    registerRoute('/yeni-kabul', renderYeniKabul);
     startRouter(pageContent);
   } catch (err) {
     app.innerHTML = `<p style="color:#b00020;padding:1rem;">Bir hata oluştu: ${escapeHtml(err.message)}</p>`;
