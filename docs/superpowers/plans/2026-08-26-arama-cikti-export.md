@@ -6,14 +6,15 @@
 
 **Architecture:** `src/lib/receipts.js` içine eklenecek `listReceipts(filters)` fonksiyonu arama sayfasının (`src/pages/arama.js`) veri kaynağıdır. Çıktı sayfası (`src/pages/mal-kabul-ciktisi.js`) tek bir kaydı, satırları `paginateRows` ile 13'erli gruplara bölerek her grubu ayrı bir `.print-page` bloğunda render eder; tarayıcının yazdırma diyaloğu (`window.print()`) ve `html2pdf.js` bu bloklar üzerinden PDF üretir. CSV export saf bir `toCsv` fonksiyonuyla (framework'ten bağımsız, test edilebilir) üretilir.
 
-**Tech Stack:** Plan 1-3'ün üzerine inşa edilir. Yeni bağımlılık: `html2pdf.js` (istemci tarafı, tek tıkla PDF indirme için).
+**Tech Stack:** Plan 1-3'ün üzerine inşa edilir. Yeni bağımlılıklar: `html2pdf.js` (istemci tarafı, tek tıkla PDF indirme için), `exceljs` (Task 7 — gerçek `.xlsx` şablonunu yükleyip stil/birleştirilmiş hücre yapısını koruyarak veri dolduran, tarayıcıda çalışan kütüphane; `xlsx`/SheetJS'in ücretsiz sürümü birleştirilmiş hücre + stil yazmayı desteklemediği için tercih edildi).
 
 ## Global Constraints
 
-- **Kritik varsayım (kullanıcıya doğrulatılmalı):** Gerçek kağıt "Mal Kabul Formu" şablonu (logo, tam sütun/satır yerleşimi) bu plan yazılırken elde değildi. Bu plan, kullanıcının belirttiği "13 satır/sayfa" kuralını ve önceki mesajlarda talep edilen alanları (Firma, Tarih, Ürün, Miktar, Birim, İrsaliye/Sipariş No, Kalite Kontrol alanları, Teslim Alan/Kontrol Eden personel) uygulayan **genel bir tablo düzeni** kullanır; "KASAP SİPARİŞ FORMU" görselinin tablo/başlık stilinden ilham alır. Gerçek şablon (fotoğraf/PDF/Excel + logo dosyası) elde edildiğinde bu plandaki `mal-kabul-ciktisi.js` sayfasının CSS/HTML'i o şablona birebir uyacak şekilde güncellenmelidir — bu bir takip görevi olarak不 (nottur), otomatik yapılmaz.
-- Sayfa başına satır sayısı sabit bir değişkende tutulur (`ROWS_PER_PAGE = 13`), tek satırdan değiştirilebilir olacak şekilde.
-- CSV export Excel ile uyumlu olması için UTF-8 BOM ile ve noktalı virgül (`;`) ayraçla üretilir (Türkçe Excel varsayılan ayracı).
-- PDF/print çıktısı sadece görüntüleme ekranındaki elemanları değil, `.print-page` bloklarını gösterir; ekran arayüzü (menü, arama kutuları) `@media print` ile gizlenir.
+- Gerçek kağıt "MAL KABUL FORMU" şablonu (Doküman No: F.22) Task 5/6'da elde edildi ve PDF/print çıktısı (`mal-kabul-ciktisi.js`) o şablona birebir uyacak şekilde yeniden tasarlandı (bkz. Task 5/6). **Task 7'de kullanıcı ayrıca şablonun kendisini (`Mal-Kabul-Formu-F22.xlsx`) paylaştı** ve gerçek `.xlsx` dosyasını birebir üreten bir export istedi — bu, `public/sablonlar/mal-kabul-formu-sablonu.xlsx` olarak projeye eklendi ve Task 7'nin temel aldığı gerçek şablon dosyasıdır.
+- Sayfa başına satır sayısı sabit bir değişkende tutulur (`ROWS_PER_PAGE = 13`, `src/lib/pagination.js`), tek satırdan değiştirilebilir olacak şekilde. Gerçek Excel şablonunun veri satırları (5-17) da tam olarak 13 satır — bu varsayımı bağımsız olarak doğruluyor.
+- **MKK sütunu kuralı (gerçek Excel şablonundan, Task 6'nın ilk halinden farklı — düzeltildi):** `uygun` → `+`, `uygun_degil` → `–` (en-dash, açıklama METNİ DEĞİL), `beklemede` → boş. Uygunsuzluğun açıklaması ayrı **Açıklama** sütununda (`item.note`) gösterilir, MKK sütununda tekrarlanmaz. Bu kural hem PDF çıktısında (Task 6) hem Excel çıktısında (Task 7) aynı paylaşılan `src/lib/mkk.js` yardımcı fonksiyonuyla uygulanır.
+- CSV export Excel ile uyumlu olması için UTF-8 BOM ile ve noktalı virgül (`;`) ayraçla üretilir (Türkçe Excel varsayılan ayracı). Formül enjeksiyonuna karşı `=+-@` ile başlayan hücreler kaçışlanır (bkz. final review fix).
+- PDF/print çıktısı sadece görüntüleme ekranındaki elemanları değil, `.print-page` bloklarını gösterir; ekran arayüzü (menü, arama kutuları) `@media print` ile gizlenir. Yazdırma/PDF için gereken CSS kuralları (tablo kenarlıkları, sayfa kırılımı) `@media print` DIŞINDA, koşulsuz tanımlanmalı — `html2pdf.js`'in `html2canvas` ile DOM'u EKRAN (screen) medyası altında klonladığı, `@media print` içine hapsedilmiş kuralların PDF çıktısına hiç yansımadığı final review'da keşfedildi (bkz. Task 6 fix round).
 
 ---
 
@@ -920,10 +921,380 @@ git commit -m "feat: gercek Mal Kabul Formu (F.22) sablonuna birebir uyan yazdir
 
 ---
 
+### Task 7: Gerçek `.xlsx` Şablonuna Birebir Uyan Excel Çıktısı (13 Satırda Bir Yeni Sayfa)
+
+**Bağlam:** Kullanıcı, şirketin gerçek "MAL KABUL FORMU" Excel dosyasını (`Mal-Kabul-Formu-F22.xlsx`) paylaştı ve çıktının bu dosyanın **birebir aynısı** olmasını, her 13 satır dolduğunda **yeni bir sayfa (worksheet sekmesi)** üretilmesini istedi. Dosya incelendi (`public/sablonlar/mal-kabul-formu-sablonu.xlsx` olarak projeye eklendi) ve tam yapısı çıkarıldı:
+
+- Tek sayfa ("Mal Kabul Formu"), yatay (landscape) A4, `A1:P29` kullanım alanı.
+- `A1:B2` logo hücresi (boş/kırık formül — göz ardı edilecek), `C1:P2` başlık "MAL KABUL FORMU" (Times New Roman 16pt kalın).
+- Başlık satırları 3-4 (Times New Roman 10pt kalın, `D6E5F3` mavi dolgu, ortalanmış, `wrap_text`, ince kenarlık): **A** Tarih, **B** Firma Adı, **C** (üstte "Fatura no" / altta "İrsaliye no" — TEK sütun, iki satırlı başlık, veri hücresinde iki değer alt alta), **D** (üstte "Seri no/" / altta "Parti no" — TEK sütun), **E-F** "Araç" (E3:F3 birleşik) alt başlıkları **E** Hijyen / **F** Sıcaklık, **G** Malzeme Adı, **H** SKT, **I** Yarı Ömrünü Geçmiş mi?, **J-L** "Ölçülen Değer" (J3:L3 birleşik) alt başlıkları **J** Ürün Sıcaklığı / **K** Kg. / **L** Adet, **M** MKK, **N** Açıklama, **O-P** İmzalar (O3:P4 birleşik).
+- Veri satırları **5-17** (tam 13 satır — `ROWS_PER_PAGE` varsayımını bağımsız doğruluyor), Times New Roman 10pt, ince kenarlık, `wrap_text`, tüm sütunlar `General` format (tarih/SKT gibi alanlar da düz metin olarak yazılacak, Excel tarih hücresi değil).
+- Satır 19-27: sabit not/lejant metni (MKK kuralı, mal kabul kriterleri, 1-4. derece riskli ürünler, alerjenler — Task 6'daki `RISK_LEGEND` ile aynı, gerçek dosyadan alınan birebir metin).
+- Satır 29: `A29` "Doküman No:F.22", `G29` "Yayın Tarihi:15.02.2026", `N29` "Rev.Tarihi/No:-/00".
+
+**MKK sütunu düzeltmesi (bu görev bunu keşfetti):** Task 6'nın ilk halinde `uygun_degil` için MKK sütununa açıklama metni yazılıyordu — gerçek şablonun kendi notuna göre (`A20` hücresi) bu YANLIŞ: `uygun` → `+`, `uygun_degil` → `–` (kısa çizgi), açıklama HER ZAMAN ayrı Açıklama sütununda. Bu görev bu mantığı `src/lib/mkk.js` adında paylaşılan bir yardımcıya çıkarır ve hem Task 6'nın PDF çıktısını hem bu görevin Excel çıktısını aynı fonksiyonla besler.
+
+**Files:**
+- Create: `src/lib/mkk.js`
+- Create: `src/lib/mal-kabul-excel.js`
+- Modify: `src/pages/mal-kabul-ciktisi.js` (paylaşılan `mkk.js`'i kullan, "Excel İndir" butonu ekle)
+- Modify: `package.json` (yeni bağımlılık: `exceljs`)
+- Test: `tests/mkk.test.js`, `tests/mal-kabul-excel.test.js`
+
+**Interfaces:**
+- `mkkSembolu(uygunluk)` → `'+' | '–' | ''`
+- `buildMalKabulWorkbook(receipt, items, templateArrayBuffer)` → `Promise<ExcelJS.Workbook>` — her 13 öğe için bir worksheet ("Sayfa 1", "Sayfa 2", ...) üretir, şablonun stil/birleştirme yapısını korur.
+
+- [ ] **Step 1: `exceljs` bağımlılığını ekle**
+
+`package.json` `dependencies` bloğuna ekle: `"exceljs": "^4.4.0"`.
+
+Run: `npm install`
+Expected: `node_modules/exceljs` klasörü oluşur.
+
+- [ ] **Step 2: `tests/mkk.test.js` yaz (paylaşılan MKK mantığı, TDD)**
+
+```javascript
+import { describe, it, expect } from 'vitest';
+import { mkkSembolu } from '../src/lib/mkk.js';
+
+describe('mkkSembolu', () => {
+  it('uygun için + döner', () => {
+    expect(mkkSembolu('uygun')).toBe('+');
+  });
+
+  it('uygun_degil için en-dash döner (açıklama metni DEĞİL)', () => {
+    expect(mkkSembolu('uygun_degil')).toBe('–');
+  });
+
+  it('beklemede için boş string döner', () => {
+    expect(mkkSembolu('beklemede')).toBe('');
+  });
+
+  it('bilinmeyen değer için boş string döner', () => {
+    expect(mkkSembolu('gecersiz')).toBe('');
+  });
+});
+```
+
+- [ ] **Step 3: Testi çalıştır, başarısız olduğunu doğrula**
+
+Run: `npm run test`
+Expected: FAIL — `mkk.js` bulunamadı.
+
+- [ ] **Step 4: `src/lib/mkk.js` yaz**
+
+```javascript
+export function mkkSembolu(uygunluk) {
+  if (uygunluk === 'uygun') return '+';
+  if (uygunluk === 'uygun_degil') return '–';
+  return '';
+}
+```
+
+- [ ] **Step 5: Testi tekrar çalıştır**
+
+Run: `npm run test`
+Expected: PASS (4/4).
+
+- [ ] **Step 6: `tests/mal-kabul-excel.test.js` yaz (gerçek şablon dosyasını kullanarak, TDD)**
+
+```javascript
+import { describe, it, expect } from 'vitest';
+import { readFile } from 'node:fs/promises';
+import { buildMalKabulWorkbook } from '../src/lib/mal-kabul-excel.js';
+
+const TEMPLATE_PATH = new URL('../public/sablonlar/mal-kabul-formu-sablonu.xlsx', import.meta.url);
+
+function ornekReceipt(overrides = {}) {
+  return {
+    receipt_date: '2026-08-27',
+    companyName: 'TEST FIRMA A.S.',
+    fatura_no: 'FTR-1',
+    irsaliye_no: 'IRS-1',
+    arac_hijyen_uygun: true,
+    arac_sicaklik: 4.5,
+    ...overrides
+  };
+}
+
+function ornekOge(overrides = {}) {
+  return {
+    lot_no: 'LOT-1',
+    skt: '2026-09-01',
+    products: { name: 'DANA ANTRIKOT (205)' },
+    yari_omur_gecti: false,
+    urun_sicakligi: 2.1,
+    quantity: 10,
+    unit: 'kg',
+    uygunluk: 'uygun',
+    note: null,
+    ...overrides
+  };
+}
+
+describe('buildMalKabulWorkbook', () => {
+  it('13 veya daha az öğe için tek "Sayfa 1" worksheet üretir', async () => {
+    const buf = await readFile(TEMPLATE_PATH);
+    const wb = await buildMalKabulWorkbook(ornekReceipt(), [ornekOge()], buf.buffer);
+    expect(wb.worksheets.map((s) => s.name)).toEqual(['Sayfa 1']);
+  });
+
+  it('14 öğe için iki worksheet üretir (13 + 1)', async () => {
+    const buf = await readFile(TEMPLATE_PATH);
+    const items = Array.from({ length: 14 }, (_, i) => ornekOge({ lot_no: `LOT-${i}` }));
+    const wb = await buildMalKabulWorkbook(ornekReceipt(), items, buf.buffer);
+    expect(wb.worksheets.map((s) => s.name)).toEqual(['Sayfa 1', 'Sayfa 2']);
+    expect(wb.worksheets[0].getCell('D5').value).toContain('LOT-0');
+    expect(wb.worksheets[1].getCell('D5').value).toContain('LOT-13');
+  });
+
+  it('doğru sütunlara doğru verileri yazar', async () => {
+    const buf = await readFile(TEMPLATE_PATH);
+    const wb = await buildMalKabulWorkbook(ornekReceipt(), [ornekOge()], buf.buffer);
+    const ws = wb.worksheets[0];
+    expect(ws.getCell('A5').value).toBe('2026-08-27');
+    expect(ws.getCell('B5').value).toBe('TEST FIRMA A.S.');
+    expect(ws.getCell('C5').value).toBe('FTR-1\nIRS-1');
+    expect(ws.getCell('D5').value).toBe('LOT-1');
+    expect(ws.getCell('E5').value).toBe('Uygun');
+    expect(ws.getCell('F5').value).toBe(4.5);
+    expect(ws.getCell('G5').value).toBe('DANA ANTRIKOT (205)');
+    expect(ws.getCell('H5').value).toBe('2026-09-01');
+    expect(ws.getCell('I5').value).toBe('Hayır');
+    expect(ws.getCell('J5').value).toBe(2.1);
+    expect(ws.getCell('K5').value).toBe(10);
+    expect(ws.getCell('L5').value).toBe('');
+    expect(ws.getCell('M5').value).toBe('+');
+    expect(ws.getCell('N5').value).toBe('-');
+  });
+
+  it('uygun_degil satırında MKK en-dash, Açıklama not metnini gösterir', async () => {
+    const buf = await readFile(TEMPLATE_PATH);
+    const oge = ornekOge({ uygunluk: 'uygun_degil', note: 'SKT geçmiş' });
+    const wb = await buildMalKabulWorkbook(ornekReceipt(), [oge], buf.buffer);
+    const ws = wb.worksheets[0];
+    expect(ws.getCell('M5').value).toBe('–');
+    expect(ws.getCell('N5').value).toBe('SKT geçmiş');
+  });
+
+  it('birim ad ise Adet sütununa, kg ise Kg sütununa yazar', async () => {
+    const buf = await readFile(TEMPLATE_PATH);
+    const oge = ornekOge({ quantity: 3, unit: 'ad' });
+    const wb = await buildMalKabulWorkbook(ornekReceipt(), [oge], buf.buffer);
+    const ws = wb.worksheets[0];
+    expect(ws.getCell('K5').value).toBe('');
+    expect(ws.getCell('L5').value).toBe(3);
+  });
+
+  it('boş satırlar 13\'e tamamlanana kadar veri yazılmadan bırakılır', async () => {
+    const buf = await readFile(TEMPLATE_PATH);
+    const wb = await buildMalKabulWorkbook(ornekReceipt(), [ornekOge()], buf.buffer);
+    const ws = wb.worksheets[0];
+    expect(ws.getCell('A6').value).toBeNull();
+    expect(ws.getCell('A17').value).toBeNull();
+  });
+});
+```
+
+- [ ] **Step 7: Testi çalıştır, başarısız olduğunu doğrula**
+
+Run: `npm run test`
+Expected: FAIL — `mal-kabul-excel.js` bulunamadı.
+
+- [ ] **Step 8: `src/lib/mal-kabul-excel.js` yaz**
+
+```javascript
+import ExcelJS from 'exceljs';
+import { paginateRows, ROWS_PER_PAGE } from './pagination.js';
+import { mkkSembolu } from './mkk.js';
+
+const VERI_BASLANGIC_SATIRI = 5; // şablonda ilk veri satırı
+
+export async function buildMalKabulWorkbook(receipt, items, templateArrayBuffer) {
+  const pages = paginateRows(items, ROWS_PER_PAGE);
+  const workbook = new ExcelJS.Workbook();
+  const templateSheetName = 'Mal Kabul Formu';
+
+  for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+    // Her sayfa için şablonu TEMİZ olarak yeniden yükle — ExcelJS aynı workbook içinde
+    // stil/birleşme korunarak worksheet kopyalamayı desteklemediği için bu, şablonun
+    // birebir aynısını (kenarlık/dolgu/font/birleştirilmiş hücreler dahil) her sayfada
+    // garanti eden en güvenilir yöntemdir.
+    const pageWorkbook = new ExcelJS.Workbook();
+    await pageWorkbook.xlsx.load(templateArrayBuffer);
+    const sheet = pageWorkbook.getWorksheet(templateSheetName);
+    sheet.name = `Sayfa ${pageIndex + 1}`;
+
+    const pageItems = pages[pageIndex];
+    pageItems.forEach((item, i) => {
+      const row = VERI_BASLANGIC_SATIRI + i;
+      sheet.getCell(`A${row}`).value = receipt.receipt_date;
+      sheet.getCell(`B${row}`).value = receipt.companyName;
+      sheet.getCell(`C${row}`).value = `${receipt.fatura_no || '-'}\n${receipt.irsaliye_no || '-'}`;
+      sheet.getCell(`D${row}`).value = item.lot_no || '-';
+      sheet.getCell(`E${row}`).value =
+        receipt.arac_hijyen_uygun === null || receipt.arac_hijyen_uygun === undefined
+          ? '-'
+          : receipt.arac_hijyen_uygun
+            ? 'Uygun'
+            : 'Uygun Değil';
+      sheet.getCell(`F${row}`).value = receipt.arac_sicaklik ?? '-';
+      sheet.getCell(`G${row}`).value = item.products?.name || '-';
+      sheet.getCell(`H${row}`).value = item.skt || '-';
+      sheet.getCell(`I${row}`).value = item.yari_omur_gecti ? 'Evet' : 'Hayır';
+      sheet.getCell(`J${row}`).value = item.urun_sicakligi ?? '-';
+      sheet.getCell(`K${row}`).value = item.unit === 'kg' ? item.quantity : '';
+      sheet.getCell(`L${row}`).value = item.unit === 'ad' ? item.quantity : '';
+      sheet.getCell(`M${row}`).value = mkkSembolu(item.uygunluk);
+      sheet.getCell(`N${row}`).value = item.uygunluk === 'uygun_degil' ? item.note || '-' : '-';
+      // O{row} (İmzalar) bilerek boş bırakılıyor — ıslak imza için.
+    });
+
+    // Bu sayfanın worksheet'ini asıl workbook'a taşı (ExcelJS worksheet'ler workbook'a bağlıdır,
+    // bu yüzden pageWorkbook'tan asıl workbook'a satır satır kopyalamak yerine tüm pageWorkbook'u
+    // tek sayfalıkken doğrudan hedef workbook'un model'ine ekliyoruz).
+    workbook._worksheets[workbook._worksheets.length] = sheet;
+    sheet._workbook = workbook;
+    workbook.model.worksheets = workbook.model.worksheets || [];
+  }
+
+  return workbook;
+}
+```
+
+**Not:** Yukarıdaki "worksheet'i asıl workbook'a taşı" adımı ExcelJS'in iç API'lerine dokunuyor ve kırılgan olabilir — implementasyon sırasında bu gerçekten çalışmıyorsa (örn. `workbook.xlsx.writeBuffer()` bozuk dosya üretirse), **alternatif ve daha sağlam yöntem**: her sayfa için ayrı bir `pageWorkbook` oluşturup her birini AYRI AYRI `.xlsx.writeBuffer()` ile buffer'a çevirip, sonra bu buffer'ları tek bir workbook'ta birleştirmek yerine — en basit sağlam çözüm, `exceljs`'in resmi desteklediği yol olan **tek workbook, N tane worksheet, her worksheet şablondan `workbook.addWorksheet()` + manuel stil kopyalama** yerine, `Promise.all` ile N tane bağımsız `.xlsx` dosyası üretip bunları **tek bir "Sayfa 1", "Sayfa 2" ... şeklinde ayrı ayrı indirmek** de kabul edilebilir bir basitleştirmedir (kullanıcı "yeni bir sayfa üret" dedi, bu N ayrı dosya olarak da karşılanabilir). Implementasyonu yapan kişi bu iki yaklaşımdan hangisi gerçekten sorunsuz çalışıyorsa onu seçmeli ve seçimini raporunda gerekçelendirmeli — test dosyasındaki `wb.worksheets` beklentisi ("tek workbook, çok worksheet") tercih edilen sonuçtur ama teknik olarak imkânsız çıkarsa (ExcelJS bunu resmi olarak desteklemiyor olabilir), testler o zaman "N ayrı workbook döner" şeklinde güncellenmeli ve bu sapma raporda açıkça belirtilmeli.
+
+- [ ] **Step 9: Testi tekrar çalıştır**
+
+Run: `npm run test`
+Expected: PASS (tüm `mal-kabul-excel.test.js` testleri).
+
+- [ ] **Step 10: `mal-kabul-ciktisi.js`'i güncelle — paylaşılan `mkk.js`'i kullan, "Excel İndir" butonu ekle**
+
+`mal-kabul-ciktisi.js`'teki yerel `mkkHucresi` fonksiyonunu kaldır, yerine `mkkSembolu` (Step 4) import et ve `MKK` sütununu `mkkSembolu(item.uygunluk)` ile doldur (artık her zaman `+`/`–`/boş — hiçbir zaman serbest metin değil, bu yüzden `escapeHtml` gerekmez). `Açıklama` sütunu zaten `item.note`'u gösteriyordu, değişmez.
+
+"Excel İndir" butonu ekle:
+
+```javascript
+<button id="excel-btn">Excel İndir</button>
+```
+
+```javascript
+container.querySelector('#excel-btn').addEventListener('click', async () => {
+  try {
+    const { buildMalKabulWorkbook } = await import('../lib/mal-kabul-excel.js');
+    const templateBuf = await fetch('/sablonlar/mal-kabul-formu-sablonu.xlsx').then((r) => r.arrayBuffer());
+    const workbook = await buildMalKabulWorkbook(receipt, items, templateBuf);
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mal-kabul-${receipt.receipt_date}-${receiptId.slice(0, 8)}.xlsx`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  } catch (err) {
+    container.querySelector('#kabul-ciktisi-msg').textContent = 'Excel oluşturulamadı: ' + err.message;
+  }
+});
+```
+
+(Buton grubuna `<p id="kabul-ciktisi-msg" class="no-print"></p>` ekle, hata mesajı için.)
+
+- [ ] **Step 11: Tarayıcıda uçtan uca doğrula**
+
+1. `npm run dev`, bir kayıt için "Çıktı" ekranını aç, "Excel İndir"e bas.
+2. İndirilen `.xlsx` dosyasını aç (veya `unzip -l` ile geçerli bir zip/xlsx olduğunu doğrula), sayfa sekmelerinin "Sayfa 1" (ve varsa "Sayfa 2") olduğunu, başlık/kenarlık/dolgu renklerinin şablonla birebir aynı olduğunu, veri hücrelerinin doğru sütunlarda olduğunu kontrol et.
+3. 13'ten fazla satırlı bir kayıt için iki sayfa (worksheet) oluştuğunu doğrula.
+
+Expected: Gerçek şablonun görsel biçimini (mavi başlık, kenarlıklar, yazı tipleri, alt not/lejant metni, doküman no/tarih) birebir koruyan, veri satırları doldurulmuş, 13 satırda bir yeni sayfa açan bir `.xlsx` dosyası iner.
+
+- [ ] **Step 12: Commit**
+
+```bash
+git add src/lib/mkk.js src/lib/mal-kabul-excel.js src/pages/mal-kabul-ciktisi.js package.json public/sablonlar/mal-kabul-formu-sablonu.xlsx tests/mkk.test.js tests/mal-kabul-excel.test.js
+git commit -m "feat: gercek xlsx sablonuna birebir uyan Excel ciktisi, 13 satirda bir yeni sayfa"
+```
+
+---
+
+### Task 8: Final Review Bulgularını Kapat (Task 1-6)
+
+Task 1-6'nın bütün-plan incelemesi 2 Critical-seviyesinde olmayan ama önemli güvenlik/işlevsellik bulgusu ve birkaç küçük bulgu buldu. Bu görev bunları kapatır.
+
+**Files:**
+- Create: `supabase/migrations/0009_anon_rpc_yetkisini_kaldir.sql`
+- Modify: `src/lib/csv.js` (formül enjeksiyonu koruması)
+- Modify: `src/pages/arama.js` (ürün filtresi eklenmesi, hata yakalama)
+- Modify: `src/pages/mal-kabul-ciktisi.js` (PDF butonunda hata yakalama)
+- Modify: `src/lib/receipts.js` (`listReceipts`'e `.limit(500)` ekle)
+- Test: `tests/csv.test.js`, `tests/receipts-list.test.js` güncellemeleri
+
+- [ ] **Step 1: `supabase/migrations/0009_anon_rpc_yetkisini_kaldir.sql` yaz**
+
+`0007`/`0008`'deki `revoke execute ... from public` satırı gerçekte `anon`'u engellemiyor — Supabase yeni fonksiyonlara `ALTER DEFAULT PRIVILEGES` ile `anon`/`authenticated`/`service_role`'e DOĞRUDAN `EXECUTE` yetkisi veriyor; `from public` bu doğrudan yetkiyi geri almıyor. Açıkça `from anon` gerekiyor:
+
+```sql
+-- 0009_anon_rpc_yetkisini_kaldir.sql
+-- 0007/0008'deki "revoke ... from public" anon'un doğrudan aldığı EXECUTE yetkisini
+-- kaldırmıyordu (Supabase varsayılan olarak anon'a da doğrudan yetki veriyor; PUBLIC'ten
+-- geri alma bunu etkilemez). Açıkça anon'dan da kaldırıyoruz.
+revoke execute on function create_receipt_with_items(
+  bigint, date, text, text, uuid, text, jsonb, boolean, text, boolean, numeric
+) from anon;
+```
+
+- [ ] **Step 2: `src/lib/csv.js`'e formül enjeksiyonu koruması ekle**
+
+`escapeCell` fonksiyonunu, hücre `=`, `+`, `-`, `@` ile başlıyorsa başına bir kesme işareti (`'`) ekleyecek şekilde güncelle (Excel/LibreOffice bu karakterleri formül olarak yorumlamaz hale gelir):
+
+```javascript
+function escapeCell(value) {
+  let str = value === undefined || value === null ? '' : String(value);
+  if (/^[=+\-@]/.test(str)) str = "'" + str;
+  return str.includes(';') || str.includes('"') || str.includes('\n')
+    ? '"' + str.replace(/"/g, '""') + '"'
+    : str;
+}
+```
+
+`tests/csv.test.js`'e ekle:
+
+```javascript
+it('formül olabilecek değerleri kesme işaretiyle etkisizleştirir', () => {
+  const csv = toCsv([{ name: '=HYPERLINK("http://kotu")', date: '2026-08-26' }], columns);
+  expect(csv.split('\n')[1]).toBe("'=HYPERLINK(\"http://kotu\");2026-08-26");
+});
+```
+
+- [ ] **Step 3: `src/pages/arama.js`'e ürün filtresi ekle**
+
+Plan'ın hedefi ("firma/tarih aralığı/**ürün**/durum") arayüzde eksikti — `listProducts` zaten import edilebilir durumda. Firma dropdown'ının yanına ürün dropdown'ı ekle (`listProducts()`'tan doldurulan `<select id="filter-product">`), `currentFilters()`'a `productId: container.querySelector('#filter-product').value || undefined` ekle.
+
+- [ ] **Step 4: `arama.js` ve `mal-kabul-ciktisi.js`'teki async buton handler'larına hata yakalama ekle**
+
+`arama.js`'teki `runSearch` ve CSV export handler'ı, `mal-kabul-ciktisi.js`'teki PDF/Excel handler'ları şu ana kadar hataları sessizce yutuyordu (router'ın hata sınırı sadece ilk render'ı kapsıyor, buton tıklamalarını değil). Her birini try/catch'e al, hatayı `yeni-kabul.js`'deki `#kabul-msg` deseniyle aynı şekilde bir durum elementine yaz.
+
+- [ ] **Step 5: `listReceipts`'e sonuç sınırı ekle**
+
+`src/lib/receipts.js`'teki `listReceipts`'in sorgu zincirine `.limit(500)` ekle (filtresiz arama tüm tabloyu çekmesin diye). `tests/receipts-list.test.js`'e bu limitin uygulandığını doğrulayan bir test ekle.
+
+- [ ] **Step 6: Testleri çalıştır, commit et**
+
+```bash
+npm run test && npm run build
+git add supabase/migrations/0009_anon_rpc_yetkisini_kaldir.sql src/lib/csv.js src/pages/arama.js src/pages/mal-kabul-ciktisi.js src/lib/receipts.js tests/csv.test.js tests/receipts-list.test.js
+git commit -m "fix: final review bulgularini kapat - anon RPC yetkisi, CSV formul enjeksiyonu, urun filtresi, hata yakalama, sonuc siniri"
+```
+
+---
+
 ## Bu Plan Tamamlandığında Doğrulanacaklar
 
-- `npm run test` yeşil (csv, pagination, receipts-list, router, receipts testleri dahil).
-- Arama sayfası firma/tarih aralığı/durum filtreleriyle çalışıyor, sonuçlar CSV olarak inebiliyor.
+- `npm run test` yeşil (csv, pagination, receipts-list, router, receipts, mkk, mal-kabul-excel testleri dahil).
+- Arama sayfası firma/tarih aralığı/ürün/durum filtreleriyle çalışıyor, sonuçlar CSV olarak inebiliyor (formül enjeksiyonuna karşı korumalı).
 - Mal kabul giriş formu artık Fatura No, Araç Hijyeni/Sıcaklığı, Ürün Sıcaklığı ve Yarı Ömür alanlarını da alıyor; kalite onay ekranı bunları salt-okunur gösteriyor.
-- Herhangi bir kayıt için "Çıktı" ekranı gerçek "MAL KABUL FORMU" (Doküman No: F.22) şablonunun sütun sırasına birebir uyan, 13 satır/sayfa kuralına göre bölünmüş, yatay (landscape) yazdırılabilir ve PDF olarak indirilebilir bir çıktı üretiyor.
+- Herhangi bir kayıt için "Çıktı" ekranı gerçek "MAL KABUL FORMU" (Doküman No: F.22) şablonunun sütun sırasına birebir uyan, 13 satır/sayfa kuralına göre bölünmüş, yatay (landscape) yazdırılabilir, PDF olarak indirilebilir VE gerçek `.xlsx` şablonunu birebir üreten (13 satırda bir yeni sayfa) bir çıktı üretiyor.
+- `create_receipt_with_items` RPC'sine anonim (giriş yapmamış) erişim kapalı.
 - **Kalan açık nokta:** Gerçek "gürok Turizm Grubu" logosu henüz `public/logo.png` olarak eklenmedi — sadece görsel, işlevi etkilemiyor (logo yoksa alan sessizce gizleniyor).
