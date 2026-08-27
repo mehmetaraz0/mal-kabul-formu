@@ -80,11 +80,18 @@ grant execute on function create_receipt_with_items(bigint, date, text, text, uu
 -- oluşturulduktan sonra değiştirilemez" ilkesiyle tutarlılık için gerekli — aksi halde yeni
 -- sütunlar sessizce bu korumanın dışında kalırdı):
 --
--- 1) receipts.fatura_no / arac_hijyen_uygun / arac_sicaklik, irsaliye_no ve siparis_no ile aynı
---    kategoridedir (teslimat anında bir kez kaydedilen sevkiyat gerçekleri). lock_receipt_core_fields
---    bunları da kapsamazsa, receipts_update_manager_draft politikası bu sütunları hiç
---    kısıtlamadığından kalite_ekibi kendi 'kalite_bekliyor' güncellemesi sırasında (örn. doğrudan
---    PostgREST çağrısıyla) bu alanları sessizce değiştirebilirdi.
+-- 1) receipts.fatura_no / arac_hijyen_uygun / arac_sicaklik, depo_yonetici'nin kabul anında girdiği
+--    ölçüm/gözlemlerdir (receipt_items.urun_sicakligi/yari_omur_gecti ile aynı kategoride — bkz.
+--    aşağıdaki (2) numaralı not). Tehdit modeli tam olarak (2) ile aynıdır: kalite_ekibi kendi
+--    'kalite_bekliyor' güncellemesi sırasında (örn. doğrudan PostgREST çağrısıyla) bu alanları
+--    sessizce değiştirebilir; ORİJİNAL sütunlar (company_id, received_by, receipt_date, irsaliye_no,
+--    siparis_no, client_uuid) ise farklı, daha geniş bir değişmezlik kuralını korur (depo_yonetici da
+--    dahil HİÇBİR rol oluşturulduktan sonra bunları değiştiremez — bu 0004'ten beri var ve bu
+--    görevin kapsamı dışında, dokunulmuyor). Bu yüzden 3 yeni sütun sadece kalite_ekibi için
+--    kilitleniyor — (2)'deki rol kontrolüyle birebir aynı desen — depo_yonetici, kendi taslağı hâlâ
+--    'taslak' durumundayken bu 3 alanı düzeltebilir (bugün bunu yapan bir UI yok, ama ileride bir
+--    "taslağı düzenle" özelliği eklendiğinde depo_yonetici'yi kendi henüz teslim etmediği kaydında
+--    gereksiz yere engellememek için).
 create or replace function public.lock_receipt_core_fields()
 returns trigger
 language plpgsql
@@ -97,12 +104,19 @@ begin
     or new.irsaliye_no is distinct from old.irsaliye_no
     or new.siparis_no is distinct from old.siparis_no
     or new.client_uuid is distinct from old.client_uuid
-    or new.fatura_no is distinct from old.fatura_no
-    or new.arac_hijyen_uygun is distinct from old.arac_hijyen_uygun
-    or new.arac_sicaklik is distinct from old.arac_sicaklik
   then
-    raise exception 'Bu alanlar oluşturulduktan sonra değiştirilemez: company_id, received_by, receipt_date, irsaliye_no, siparis_no, client_uuid, fatura_no, arac_hijyen_uygun, arac_sicaklik';
+    raise exception 'Bu alanlar oluşturulduktan sonra değiştirilemez: company_id, received_by, receipt_date, irsaliye_no, siparis_no, client_uuid';
   end if;
+
+  if exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'kalite_ekibi') then
+    if new.fatura_no is distinct from old.fatura_no
+      or new.arac_hijyen_uygun is distinct from old.arac_hijyen_uygun
+      or new.arac_sicaklik is distinct from old.arac_sicaklik
+    then
+      raise exception 'Kalite ekibi fatura no / araç hijyeni / araç sıcaklığı alanlarını değiştiremez';
+    end if;
+  end if;
+
   return new;
 end;
 $$;
