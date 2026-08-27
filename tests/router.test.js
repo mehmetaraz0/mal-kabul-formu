@@ -39,4 +39,20 @@ describe('router', () => {
     window.dispatchEvent(new Event('hashchange'));
     expect(renderFn).toHaveBeenCalledTimes(1);
   });
+
+  it('startRouter farklı bir container ile tekrar çağrıldığında yeniden render eder (çıkış/tekrar giriş senaryosu)', () => {
+    const container1 = document.createElement('div');
+    const container2 = document.createElement('div');
+    const renderFn = vi.fn();
+    registerRoute('/firmalar', renderFn);
+    window.location.hash = '/firmalar';
+
+    startRouter(container1);
+    expect(renderFn).toHaveBeenCalledTimes(1);
+    expect(renderFn).toHaveBeenLastCalledWith(container1);
+
+    startRouter(container2);
+    expect(renderFn).toHaveBeenCalledTimes(2);
+    expect(renderFn).toHaveBeenLastCalledWith(container2);
+  });
 });

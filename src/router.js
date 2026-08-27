@@ -1,10 +1,9 @@
+import { escapeHtml } from './lib/html.js';
+
 const routes = new Map();
 let rootContainer = null;
-// navigate() render'ı senkron tetikler VE hashchange olayı da (asenkron) aynı render'ı
-// tekrar tetikler; bu guard olmadan her navigate() çağrısı render fonksiyonunu iki kez
-// çalıştırır. Bugün için zararsız (route handler'ları idempotent) ama Plan 3/4'te route
-// handler'ları veri çekmeye (fetch) başlayınca çift render = çift istek anlamına gelir.
-let lastRenderedPath = null;
+let suppressNextHashChange = false;
+let renderGeneration = 0;
 
 export function registerRoute(path, renderFn) {
   routes.set(path, renderFn);
@@ -12,31 +11,39 @@ export function registerRoute(path, renderFn) {
 
 export function _resetRoutes() {
   routes.clear();
-  lastRenderedPath = null;
+  suppressNextHashChange = false;
 }
 
 export function navigate(path) {
+  const current = window.location.hash.slice(1) || '/';
+  if (path !== current) suppressNextHashChange = true;
   window.location.hash = path;
-  // hashchange olayı tarayıcılarda (ve jsdom/happy-dom'da) asenkron tetiklenir;
-  // navigate() çağıranın hemen ardından güncel içeriği görmesi için burada da render ediyoruz.
-  // Kullanıcının geri/ileri tuşlarıyla tetiklediği hash değişiklikleri hashchange listener'ı ile yakalanmaya devam eder.
+  renderCurrent();
+}
+
+function onHashChange() {
+  if (suppressNextHashChange) {
+    suppressNextHashChange = false;
+    return;
+  }
   renderCurrent();
 }
 
 function renderCurrent() {
   if (!rootContainer) return;
   const path = window.location.hash.slice(1) || '/';
-  // navigate()'in senkron çağrısı zaten bu path'i render ettiyse, hashchange olayı geldiğinde
-  // (veya başka bir nedenle renderCurrent tekrar çağrıldığında) aynı path için render fonksiyonunu
-  // ikinci kez çalıştırmayı atla — bkz. yukarıdaki lastRenderedPath yorumu.
-  if (path === lastRenderedPath) return;
-  lastRenderedPath = path;
   const renderFn = routes.get(path) || routes.get('/');
-  if (renderFn) renderFn(rootContainer);
+  if (!renderFn) return;
+  const container = rootContainer;
+  const myGeneration = ++renderGeneration;
+  Promise.resolve(renderFn(container)).catch((err) => {
+    if (myGeneration !== renderGeneration) return; // bu render artık eski, ekrana yazma
+    container.innerHTML = `<p style="color:#b00020;padding:1rem;">Bir hata oluştu: ${escapeHtml(err.message)}</p>`;
+  });
 }
 
 export function startRouter(container) {
   rootContainer = container;
-  window.addEventListener('hashchange', renderCurrent);
+  window.addEventListener('hashchange', onHashChange);
   renderCurrent();
 }

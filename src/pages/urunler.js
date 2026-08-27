@@ -40,7 +40,6 @@ export async function renderUrunler(container) {
   `;
   addBox.querySelector('#urun-add-form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const msg = container.querySelector('#urun-msg');
     try {
       await addProduct({
         code: addBox.querySelector('#new-urun-code').value,
@@ -48,12 +47,14 @@ export async function renderUrunler(container) {
         unit: addBox.querySelector('#new-urun-unit').value,
         category: addBox.querySelector('#new-urun-category').value
       });
+      await renderUrunler(container);
+      const msg = container.querySelector('#urun-msg');
       msg.style.color = 'green';
       msg.textContent = 'Ürün eklendi.';
-      renderUrunler(container);
     } catch (err) {
+      const msg = container.querySelector('#urun-msg');
       msg.style.color = '#b00020';
-      msg.textContent = 'Hata: ' + err.message;
+      msg.textContent = err.code === '23505' ? 'Hata: Bu ürün kodu zaten kayıtlı.' : 'Hata: ' + err.message;
     }
   });
 

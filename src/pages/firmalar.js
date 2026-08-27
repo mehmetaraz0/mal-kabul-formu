@@ -27,16 +27,18 @@ export async function renderFirmalar(container) {
   addBox.querySelector('#firma-add-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const input = addBox.querySelector('#new-firma-name');
-    const msg = container.querySelector('#firma-msg');
+    const name = input.value;
     try {
-      await addCompany(input.value);
+      await addCompany(name);
       input.value = '';
+      await renderFirmalar(container);
+      const msg = container.querySelector('#firma-msg');
       msg.style.color = 'green';
       msg.textContent = 'Firma eklendi.';
-      renderFirmalar(container);
     } catch (err) {
+      const msg = container.querySelector('#firma-msg');
       msg.style.color = '#b00020';
-      msg.textContent = 'Hata: ' + err.message;
+      msg.textContent = err.code === '23505' ? 'Hata: Bu firma zaten kayıtlı.' : 'Hata: ' + err.message;
     }
   });
 
