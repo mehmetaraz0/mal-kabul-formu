@@ -114,22 +114,30 @@ export async function renderMalKabulCiktisi(container) {
       <button id="print-btn">Yazdır</button>
       <button id="pdf-btn">PDF İndir</button>
     </div>
+    <p id="ciktisi-msg" class="no-print"></p>
     <div id="print-area">${pagesHtml}</div>
   `;
 
   container.querySelector('#print-btn').addEventListener('click', () => window.print());
   container.querySelector('#pdf-btn').addEventListener('click', async () => {
-    const html2pdf = (await import('html2pdf.js')).default;
-    html2pdf()
-      .set({
-        filename: `mal-kabul-${receipt.receipt_date}-${receiptId.slice(0, 8)}.pdf`,
-        margin: 5,
-        jsPDF: { format: 'a4', orientation: 'landscape' },
-        // .print-page bölümlerinin sayfa sınırlarıyla eşleşmesi için computed style'a
-        // (page-break-after) ek olarak açıkça de belirtiyoruz.
-        pagebreak: { mode: 'css', after: '.print-page' }
-      })
-      .from(container.querySelector('#print-area'))
-      .save();
+    const msg = container.querySelector('#ciktisi-msg');
+    msg.textContent = '';
+    try {
+      const html2pdf = (await import('html2pdf.js')).default;
+      await html2pdf()
+        .set({
+          filename: `mal-kabul-${receipt.receipt_date}-${receiptId.slice(0, 8)}.pdf`,
+          margin: 5,
+          jsPDF: { format: 'a4', orientation: 'landscape' },
+          // .print-page bölümlerinin sayfa sınırlarıyla eşleşmesi için computed style'a
+          // (page-break-after) ek olarak açıkça de belirtiyoruz.
+          pagebreak: { mode: 'css', after: '.print-page' }
+        })
+        .from(container.querySelector('#print-area'))
+        .save();
+    } catch (err) {
+      msg.style.color = '#b00020';
+      msg.textContent = 'Hata: ' + err.message;
+    }
   });
 }

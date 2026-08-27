@@ -28,4 +28,17 @@ describe('toCsv', () => {
     const csv = toCsv([], columns);
     expect(csv).toBe('Firma;Tarih');
   });
+
+  it('formül olabilecek değerleri kesme işaretiyle etkisizleştirir', () => {
+    // Not: değer ayrıca '"' de içerdiği için (mevcut tırnak-içine-alma kuralı gereği) hücre
+    // tırnak içine alınır ve iç tırnaklar '""' olarak katlanır — kesme işareti eklemek bu
+    // kuralı atlamaz, sadece formül olarak yorumlanmayı engeller.
+    const csv = toCsv([{ name: '=HYPERLINK("http://kotu")', date: '2026-08-26' }], columns);
+    expect(csv.split('\n')[1]).toBe('"\'=HYPERLINK(""http://kotu"")";2026-08-26');
+  });
+
+  it('formül olabilecek ama tırnak içermeyen değeri katlamadan kesme işaretiyle etkisizleştirir', () => {
+    const csv = toCsv([{ name: '+1 234', date: '2026-08-26' }], columns);
+    expect(csv.split('\n')[1]).toBe("'+1 234;2026-08-26");
+  });
 });

@@ -6,7 +6,8 @@ const receiptsQuery = {
   lte: vi.fn(function () { return this; }),
   eq: vi.fn(function () { return this; }),
   in: vi.fn(function () { return this; }),
-  order: vi.fn(() => Promise.resolve({
+  order: vi.fn(function () { return this; }),
+  limit: vi.fn(() => Promise.resolve({
     data: [{ id: 'r1', receipt_date: '2026-08-20', irsaliye_no: 'IRS-1', siparis_no: null, status: 'onaylandi', companies: { name: 'TEST FIRMA' } }],
     error: null
   }))
@@ -76,5 +77,10 @@ describe('listReceipts', () => {
     expect(receiptsQuery.eq).toHaveBeenCalledWith('company_id', 5);
     expect(receiptsQuery.eq).toHaveBeenCalledWith('status', 'kalite_bekliyor');
     expect(receiptsQuery.in).toHaveBeenCalledWith('id', ['r1']);
+  });
+
+  it('filtresiz aramada bile sonuç 500 kayıtla sınırlanır', async () => {
+    await listReceipts({});
+    expect(receiptsQuery.limit).toHaveBeenCalledWith(500);
   });
 });

@@ -1,5 +1,9 @@
 function escapeCell(value) {
-  const str = value === undefined || value === null ? '' : String(value);
+  let str = value === undefined || value === null ? '' : String(value);
+  // Formül enjeksiyonu koruması: Excel/LibreOffice bu karakterlerle başlayan hücreleri
+  // formül olarak yorumlar (örn. =HYPERLINK(...) veya =CMD(...)). Başa kesme işareti (')
+  // eklemek hücreyi metin olarak zorlar, formül olarak yorumlanmasını engeller.
+  if (/^[=+\-@]/.test(str)) str = "'" + str;
   return str.includes(';') || str.includes('"') || str.includes('\n')
     ? '"' + str.replace(/"/g, '""') + '"'
     : str;

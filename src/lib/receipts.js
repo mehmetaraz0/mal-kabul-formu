@@ -152,7 +152,8 @@ export async function listReceipts({ companyId, startDate, endDate, status, prod
     query = query.in('id', receiptIds);
   }
 
-  const { data, error } = await query.order('receipt_date', { ascending: false });
+  // Filtresiz (veya geniş filtreli) bir arama tüm tabloyu istemeden çekmesin diye üst sınır.
+  const { data, error } = await query.order('receipt_date', { ascending: false }).limit(500);
   if (error) throw error;
   return data;
 }
