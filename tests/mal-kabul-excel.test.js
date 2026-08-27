@@ -8,9 +8,17 @@ import { buildMalKabulWorkbook } from '../src/lib/mal-kabul-excel.js';
 // proje köküne (vitest'in cwd'si) göre çözülüyor.
 const TEMPLATE_PATH = resolve(process.cwd(), 'public/sablonlar/mal-kabul-formu-sablonu.xlsx');
 
+// Ham ArrayBuffer döner — buildMalKabulWorkbook'un realm normalizasyonunu da kapsar.
 async function sablon() {
   const buf = await readFile(TEMPLATE_PATH);
   return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+}
+
+// Şablonu doğrudan ExcelJS'e yüklemek isteyen testler için. ExcelJS'in altındaki JSZip
+// `instanceof` ile tip belirlediğinden, node realm'inden gelen ham ArrayBuffer jsdom
+// ortamında reddedilir; bu yüzden testin kendi realm'inde Uint8Array'e sarılır.
+async function sablonBytes() {
+  return new Uint8Array(await sablon());
 }
 
 function ornekReceipt(overrides = {}) {
@@ -111,6 +119,54 @@ describe('buildMalKabulWorkbook', () => {
       expect(ws.getCell('A3').fill.fgColor.argb).toBe('FFD6E5F3');
       expect(ws.getCell('A5').border.left.style).toBe('thin');
       expect(ws.getCell('A5').font.name).toBe('Times New Roman');
+    }
+  });
+
+  it('şablonun workbook seviyesindeki media koleksiyonunu korur', async () => {
+    const tpl = new ExcelJS.Workbook();
+    await tpl.xlsx.load(await sablonBytes());
+    expect(tpl.media.length).toBe(1); // şablondaki logo PNG'si
+
+    const wb = await buildMalKabulWorkbook(ornekReceipt(), [ornekOge()], await sablon());
+    expect(wb.media.length).toBe(tpl.media.length);
+  });
+
+  it('şablona gerçek (anchor\'lı) bir resim eklenirse yazma çökmeden çalışır', async () => {
+    // Şablona ileride worksheet.addImage() ile bir logo eklenirse, workbook.media
+    // taşınmadığı sürece writeBuffer() "Cannot read properties of undefined
+    // (reading 'name')" ile çökerdi. Bu test o regresyonu yakalar.
+    const tpl = new ExcelJS.Workbook();
+    await tpl.xlsx.load(await sablonBytes());
+    const tws = tpl.getWorksheet('Mal Kabul Formu');
+    const imageId = tpl.addImage({ buffer: tpl.media[0].buffer, extension: 'png' });
+    tws.addImage(imageId, 'A1:B2');
+    const zenginSablon = await tpl.xlsx.writeBuffer();
+
+    const items = Array.from({ length: 14 }, (_, i) => ornekOge({ lot_no: `LOT-${i}` }));
+    const wb = await buildMalKabulWorkbook(ornekReceipt(), items, zenginSablon);
+    const buffer = await wb.xlsx.writeBuffer();
+
+    const tekrar = new ExcelJS.Workbook();
+    await tekrar.xlsx.load(buffer);
+    expect(tekrar.worksheets.map((s) => s.name)).toEqual(['Sayfa 1', 'Sayfa 2']);
+    // Her iki sayfa da anchor'lı resmini korumalı.
+    for (const ws of tekrar.worksheets) {
+      expect(ws.getImages()).toHaveLength(1);
+    }
+  });
+
+  it('yazdırma alanı her sayfada GÜNCEL sayfa adıyla korunur', async () => {
+    const tpl = new ExcelJS.Workbook();
+    await tpl.xlsx.load(await sablonBytes());
+    tpl.getWorksheet('Mal Kabul Formu').pageSetup.printArea = 'A1:P29';
+    const zenginSablon = await tpl.xlsx.writeBuffer();
+
+    const items = Array.from({ length: 14 }, (_, i) => ornekOge({ lot_no: `LOT-${i}` }));
+    const wb = await buildMalKabulWorkbook(ornekReceipt(), items, zenginSablon);
+    const tekrar = new ExcelJS.Workbook();
+    await tekrar.xlsx.load(await wb.xlsx.writeBuffer());
+    for (const ws of tekrar.worksheets) {
+      expect(ws.pageSetup.printArea).toBe('A1:P29');
     }
   });
 

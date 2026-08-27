@@ -1,17 +1,12 @@
 import ExcelJS from 'exceljs';
 import { paginateRows, ROWS_PER_PAGE } from './pagination.js';
-import { mkkSembolu } from './mkk.js';
+import { mkkSembolu, evetHayirYokBilgi } from './mkk.js';
 
 // Şablondaki (public/sablonlar/mal-kabul-formu-sablonu.xlsx) sabit yerleşim:
 // satır 1-2 logo/başlık, 3-4 sütun başlıkları, 5-17 veri (tam 13 satır = ROWS_PER_PAGE),
 // 19-27 not/lejant metni, 29 doküman kontrol satırı.
 const VERI_BASLANGIC_SATIRI = 5;
 const SABLON_SAYFA_ADI = 'Mal Kabul Formu';
-
-function evetHayirYokBilgi(value) {
-  if (value === null || value === undefined) return '-';
-  return value ? 'Uygun' : 'Uygun Değil';
-}
 
 // ExcelJS'in altındaki JSZip girdi tipini `instanceof` ile belirler; farklı bir realm'den
 // gelen (ör. jsdom test ortamı, ya da bir Worker) ArrayBuffer bu kontrolü geçemez ve
@@ -81,6 +76,19 @@ export async function buildMalKabulWorkbook(receipt, items, templateArrayBuffer)
       workbook.views = pageWorkbook.views;
       workbook.properties = pageWorkbook.properties;
       workbook.calcProperties = pageWorkbook.calcProperties;
+      // Resimler workbook seviyesinde (`workbook.media`) tutulur; worksheet ise onlara
+      // `_media[].imageId` ile INDEKS üzerinden atıf yapar. Media taşınmazsa şablona
+      // gerçek (anchor'lı) bir logo eklendiği anda writeBuffer() doğrudan çöker:
+      // "Cannot read properties of undefined (reading 'name')" (worksheet-xform.js).
+      workbook.media = pageWorkbook.media;
+      // `definedNames` BİLEREK kopyalanmıyor. Yazdırma alanı zaten worksheet'in
+      // `pageSetup.printArea`'sında taşınır ve ExcelJS onu yazarken sayfanın GÜNCEL
+      // adıyla yeniden üretir ('Sayfa 1'!$A$1:$P$29) — doğrulandı. Geriye kalan
+      // kullanıcı tanımlı adlar ise şablon sayfasına adıyla atıf yapar
+      // ("'Mal Kabul Formu'!$A$5:$P$17"); sayfaları "Sayfa N" olarak yeniden
+      // adlandırdığımız için bunları olduğu gibi kopyalamak, olmayan bir sayfayı
+      // gösteren (#REF!) bozuk bir ad üretir. Workbook kapsamlı adlar benzersiz
+      // olmak zorunda olduğundan N sayfa için doğru tek bir hedef de yoktur.
     }
 
     const id = pageIndex + 1;

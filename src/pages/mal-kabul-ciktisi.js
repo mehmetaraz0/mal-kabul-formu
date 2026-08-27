@@ -2,7 +2,7 @@ import { getReceiptDetail } from '../lib/receipts.js';
 import { getQueryParam } from '../router.js';
 import { paginateRows, ROWS_PER_PAGE } from '../lib/pagination.js';
 import { escapeHtml } from '../lib/html.js';
-import { mkkSembolu } from '../lib/mkk.js';
+import { mkkSembolu, evetHayirYokBilgi } from '../lib/mkk.js';
 
 // Kullanıcının paylaştığı gerçek forma ait doküman kontrol bilgileri (Doküman No:F.22,
 // Yayın Tarihi:15.02.2026, Rev.Tarihi/No:/00). Form revize edilirse burası güncellenir.
@@ -17,11 +17,6 @@ const RISK_LEGEND = `
   <strong>4. Derece riskli ürünler:</strong> Sebze, meyve.
   <br/><strong>Alerjen gıdalar:</strong> Gluten içeren tahıllar, kabuklular, yumurta, balık, kerevit, hardal, susam tohumu, kükürt dioksit, sülfitler, acı bakla, yumuşakçalar.
 `;
-
-function evetHayirYokBilgi(value) {
-  if (value === null || value === undefined) return '-';
-  return value ? 'Uygun' : 'Uygun Değil';
-}
 
 export async function renderMalKabulCiktisi(container) {
   const receiptId = getQueryParam('id');
