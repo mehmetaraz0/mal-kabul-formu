@@ -2,6 +2,7 @@ import { getReceiptDetail } from '../lib/receipts.js';
 import { getQueryParam } from '../router.js';
 import { paginateRows, ROWS_PER_PAGE } from '../lib/pagination.js';
 import { escapeHtml } from '../lib/html.js';
+import { mkkSembolu } from '../lib/mkk.js';
 
 // Kullanıcının paylaştığı gerçek forma ait doküman kontrol bilgileri (Doküman No:F.22,
 // Yayın Tarihi:15.02.2026, Rev.Tarihi/No:/00). Form revize edilirse burası güncellenir.
@@ -20,12 +21,6 @@ const RISK_LEGEND = `
 function evetHayirYokBilgi(value) {
   if (value === null || value === undefined) return '-';
   return value ? 'Uygun' : 'Uygun Değil';
-}
-
-function mkkHucresi(item) {
-  if (item.uygunluk === 'uygun') return '+';
-  if (item.uygunluk === 'uygun_degil') return escapeHtml(item.note || 'Uygun Değil');
-  return '-';
 }
 
 export async function renderMalKabulCiktisi(container) {
@@ -75,7 +70,7 @@ export async function renderMalKabulCiktisi(container) {
               <td>${item.urun_sicakligi ?? '-'}</td>
               <td>${item.unit === 'kg' ? item.quantity : ''}</td>
               <td>${item.unit === 'ad' ? item.quantity : ''}</td>
-              <td>${mkkHucresi(item)}</td>
+              <td>${mkkSembolu(item.uygunluk)}</td>
               <td>${escapeHtml(item.note || '-')}</td>
               <td></td>
             </tr>`
@@ -113,6 +108,7 @@ export async function renderMalKabulCiktisi(container) {
     <div class="no-print" style="margin-bottom:1rem;display:flex;gap:0.5rem;">
       <button id="print-btn">Yazdır</button>
       <button id="pdf-btn">PDF İndir</button>
+      <button id="excel-btn">Excel İndir</button>
     </div>
     <p id="ciktisi-msg" class="no-print"></p>
     <div id="print-area">${pagesHtml}</div>
@@ -138,6 +134,32 @@ export async function renderMalKabulCiktisi(container) {
     } catch (err) {
       msg.style.color = '#b00020';
       msg.textContent = 'Hata: ' + err.message;
+    }
+  });
+
+  container.querySelector('#excel-btn').addEventListener('click', async () => {
+    const msg = container.querySelector('#ciktisi-msg');
+    msg.textContent = '';
+    try {
+      // exceljs büyük bir bağımlılık — sadece butona basıldığında yüklensin.
+      const { buildMalKabulWorkbook } = await import('../lib/mal-kabul-excel.js');
+      const res = await fetch('/sablonlar/mal-kabul-formu-sablonu.xlsx');
+      if (!res.ok) throw new Error(`Şablon indirilemedi (${res.status})`);
+      const templateBuf = await res.arrayBuffer();
+      const workbook = await buildMalKabulWorkbook(receipt, items, templateBuf);
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mal-kabul-${receipt.receipt_date}-${receiptId.slice(0, 8)}.xlsx`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (err) {
+      msg.style.color = '#b00020';
+      msg.textContent = 'Excel oluşturulamadı: ' + err.message;
     }
   });
 }
