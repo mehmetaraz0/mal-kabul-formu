@@ -93,6 +93,10 @@ end;
 $$;
 
 -- Fix 12 (minor, defense in depth): anon rolünün bu RPC'yi çağırmak için meşru bir nedeni yok.
--- RLS zaten `to authenticated` politikalarıyla engelliyor, ama anon varsayılan olarak PUBLIC
--- EXECUTE aldığı için açıkça geri alıyoruz.
-revoke execute on function create_receipt_with_items(bigint, date, text, text, uuid, text, jsonb, boolean) from anon;
+-- RLS zaten `to authenticated` politikalarıyla engelliyor, ama Postgres yeni fonksiyonlara
+-- varsayılan olarak PUBLIC EXECUTE verir (anon dahil tüm rollere miras kalır). Sadece
+-- `... from anon` yazmak PUBLIC üzerinden gelen yetkiyi geri almaz (anon'a doğrudan verilmiş bir
+-- yetki yok ki geri alınsın) — bu yüzden önce PUBLIC'ten geri alıp sonra sadece authenticated'e
+-- açıkça veriyoruz.
+revoke execute on function create_receipt_with_items(bigint, date, text, text, uuid, text, jsonb, boolean) from public;
+grant execute on function create_receipt_with_items(bigint, date, text, text, uuid, text, jsonb, boolean) to authenticated;
