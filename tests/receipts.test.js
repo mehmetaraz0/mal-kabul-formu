@@ -1,16 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-const mockState = { receiptsInsertResult: { data: { id: 'r1' }, error: null } };
+const mockState = { rpcResult: { data: 'r1', error: null } };
 
 vi.mock('../src/lib/supabase.js', () => {
+  const rpc = vi.fn(() => Promise.resolve(mockState.rpcResult));
   const from = vi.fn((table) => {
     if (table === 'receipts') {
       return {
-        insert: vi.fn(() => ({
-          select: vi.fn(() => ({
-            single: vi.fn(() => Promise.resolve(mockState.receiptsInsertResult))
-          }))
-        })),
         update: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ error: null })) })),
         select: vi.fn(() => ({
           eq: vi.fn(() => ({
@@ -40,7 +36,7 @@ vi.mock('../src/lib/supabase.js', () => {
     }
     throw new Error('beklenmeyen tablo: ' + table);
   });
-  return { supabase: { from } };
+  return { supabase: { from, rpc } };
 });
 
 import {
@@ -51,6 +47,7 @@ import {
   updateItemUygunluk,
   finalizeQuality
 } from '../src/lib/receipts.js';
+import { supabase } from '../src/lib/supabase.js';
 
 describe('receipts', () => {
   it('createReceiptWithItems en az bir satır ister', async () => {
@@ -65,6 +62,12 @@ describe('receipts', () => {
       items: [{ productId: 1, lotNo: 'L1', skt: '2026-09-01', quantity: 10, unit: 'kg' }]
     });
     expect(id).toBe('r1');
+    expect(supabase.rpc).toHaveBeenCalledWith('create_receipt_with_items', expect.objectContaining({
+      p_company_id: 1,
+      p_items: expect.arrayContaining([expect.objectContaining({ productId: 1, lineNo: 1, unit: 'kg' })])
+    }));
+    const callArgs = supabase.rpc.mock.calls[0][1];
+    expect(callArgs.p_items[0].productId).toBe(1);
   });
 
   it('listPendingQuality kalite_bekliyor kayıtlarını döner', async () => {

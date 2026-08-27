@@ -3,35 +3,24 @@ import { supabase } from './supabase.js';
 export async function createReceiptWithItems({ companyId, receiptDate, irsaliyeNo, siparisNo, receivedBy, items }) {
   if (!items || items.length === 0) throw new Error('En az bir ürün satırı gerekli');
 
-  const { data: receipt, error: receiptError } = await supabase
-    .from('receipts')
-    .insert({
-      client_uuid: crypto.randomUUID(),
-      company_id: companyId,
-      receipt_date: receiptDate,
-      irsaliye_no: irsaliyeNo || null,
-      siparis_no: siparisNo || null,
-      received_by: receivedBy,
-      status: 'taslak'
-    })
-    .select()
-    .single();
-  if (receiptError) throw receiptError;
-
-  const rows = items.map((item, index) => ({
-    receipt_id: receipt.id,
-    product_id: item.productId,
-    line_no: index + 1,
-    lot_no: item.lotNo || null,
-    skt: item.skt || null,
-    quantity: item.quantity,
-    unit: item.unit,
-    uygunluk: 'beklemede'
-  }));
-  const { error: itemsError } = await supabase.from('receipt_items').insert(rows);
-  if (itemsError) throw itemsError;
-
-  return receipt.id;
+  const { data, error } = await supabase.rpc('create_receipt_with_items', {
+    p_company_id: companyId,
+    p_receipt_date: receiptDate,
+    p_irsaliye_no: irsaliyeNo || null,
+    p_siparis_no: siparisNo || null,
+    p_received_by: receivedBy,
+    p_client_uuid: crypto.randomUUID(),
+    p_items: items.map((item, index) => ({
+      productId: item.productId,
+      lineNo: index + 1,
+      lotNo: item.lotNo || null,
+      skt: item.skt || null,
+      quantity: item.quantity,
+      unit: item.unit
+    }))
+  });
+  if (error) throw error;
+  return data;
 }
 
 export async function submitForQuality(receiptId) {
