@@ -1,5 +1,6 @@
 import { getCurrentProfile, onAuthStateChange, signOut } from './lib/auth.js';
 import { renderLogin } from './pages/login.js';
+import { renderFirmalar } from './pages/firmalar.js';
 import { escapeHtml } from './lib/html.js';
 import { registerRoute, startRouter, navigate } from './router.js';
 
@@ -34,6 +35,7 @@ async function renderApp() {
 
     const pageContent = app.querySelector('#page-content');
     registerRoute('/', (c) => { c.innerHTML = '<p>Ana sayfa — sonraki planlarda mal kabul formu buraya eklenecek.</p>'; });
+    registerRoute('/firmalar', renderFirmalar);
     startRouter(pageContent);
   } catch (err) {
     app.innerHTML = `<p style="color:#b00020;padding:1rem;">Bir hata oluştu: ${escapeHtml(err.message)}</p>`;
