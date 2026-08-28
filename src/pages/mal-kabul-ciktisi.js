@@ -33,7 +33,7 @@ export async function renderMalKabulCiktisi(container) {
       (pageItems, pageIndex) => `
     <div class="print-page">
       <div class="print-header">
-        <img src="/logo.png" alt="Logo" onerror="this.style.display='none'" />
+        <img src="${import.meta.env.BASE_URL}logo.png" alt="Logo" onerror="this.style.display='none'" />
         <div class="print-title">MAL KABUL FORMU</div>
         <div>Sayfa ${pageIndex + 1} / ${pages.length}</div>
       </div>
@@ -138,7 +138,11 @@ export async function renderMalKabulCiktisi(container) {
     try {
       // exceljs büyük bir bağımlılık — sadece butona basıldığında yüklensin.
       const { buildMalKabulWorkbook } = await import('../lib/mal-kabul-excel.js');
-      const res = await fetch('/sablonlar/mal-kabul-formu-sablonu.xlsx');
+      // GitHub Pages'te uygulama kök dizinde değil bir alt-yolda (`/mal-kabul-formu/`)
+      // yayında; `import.meta.env.BASE_URL` Vite'ın `base` ayarına göre doğru öneki
+      // (dev'de '/', prod'da '/mal-kabul-formu/') verir — sabit '/sablonlar/...' yolu
+      // canlıda 404 veriyordu.
+      const res = await fetch(`${import.meta.env.BASE_URL}sablonlar/mal-kabul-formu-sablonu.xlsx`);
       if (!res.ok) throw new Error(`Şablon indirilemedi (${res.status})`);
       const templateBuf = await res.arrayBuffer();
       const workbook = await buildMalKabulWorkbook(receipt, items, templateBuf);
