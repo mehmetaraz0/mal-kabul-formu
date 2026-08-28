@@ -68,7 +68,11 @@ async function removeFromQueue(clientUuid) {
 // Kayıt HİÇBİR durumda kuyruktan atılmıyor ("kalıcı" sandığımız bir hata, silinmiş bir ürünün
 // geri eklenmesiyle pekâlâ düzelebilir) — sadece deneme sıklığı düşürülüyor ve görünür kılınıyor.
 async function recordFailure(clientUuid, err) {
-  const message = (err && err.message) || String(err) || 'Bilinmeyen hata';
+  // Düz nesne (PostgrestError şekli) için String(err) "[object Object]" verirdi — önce `message`
+  // alanına, o da yoksa yalnızca ilkel değerlerde anlamlı olan String()'e düşüyoruz.
+  const message =
+    (err && typeof err.message === 'string' && err.message) ||
+    (err == null || typeof err === 'object' ? 'Bilinmeyen hata' : String(err));
   const kind = isNetworkError(err) ? 'network' : 'application';
   await update(QUEUE_KEY, (queue = []) =>
     queue.map((e) => {
