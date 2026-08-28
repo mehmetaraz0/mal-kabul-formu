@@ -1,7 +1,10 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
+// GitHub Pages'te bir proje sitesi (kullanici.github.io/repo-adi/) olarak yayınlanıyor;
+// tüm asset yolları bu alt-dizine göre üretilmeli, aksi halde CSS/JS 404 verir.
 export default defineConfig({
+  base: '/mal-kabul-formu/',
   plugins: [
     VitePWA({
       // 'autoUpdate' DEĞİL: yeni bir deploy yayınlandığında service worker hemen skipWaiting
@@ -19,7 +22,8 @@ export default defineConfig({
         theme_color: '#1e3a5f',
         background_color: '#ffffff',
         display: 'standalone',
-        start_url: '/',
+        start_url: '/mal-kabul-formu/',
+        scope: '/mal-kabul-formu/',
         icons: [
           { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' }
