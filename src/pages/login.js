@@ -4,12 +4,12 @@ const EMAIL_DOMAIN = '@malkabul.local';
 
 export function renderLogin(container, onSuccess) {
   container.innerHTML = `
-    <form id="login-form" style="max-width:320px;margin:4rem auto;display:flex;flex-direction:column;gap:0.75rem;">
-      <h1>Mal Kabul Formu</h1>
+    <form id="login-form" class="card" style="max-width:340px;margin:4rem auto;display:flex;flex-direction:column;gap:0.9rem;">
+      <h1 style="text-align:center;">Mal Kabul Formu</h1>
       <input type="text" id="login-username" placeholder="Kullanıcı Adı" required autocomplete="username" />
       <input type="password" id="login-password" placeholder="Şifre" required autocomplete="current-password" />
       <button type="submit">Giriş Yap</button>
-      <p id="login-error" style="color:#b00020;"></p>
+      <p id="login-error" style="color:var(--color-danger-text);margin:0;"></p>
     </form>
   `;
 
