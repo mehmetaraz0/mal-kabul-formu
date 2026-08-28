@@ -4,10 +4,15 @@ import { getCurrentProfile, hasRole } from '../lib/auth.js';
 
 export async function renderUrunler(container) {
   container.innerHTML = `
-    <h2>Ürünler</h2>
-    <div id="urun-search"></div>
-    <div id="urun-add"></div>
-    <p id="urun-msg"></p>
+    <div class="card">
+      <div class="card-header"><div class="card-header-title">🔍 Ürün Ara</div></div>
+      <div id="urun-search"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><div class="card-header-title">📦 Yeni Ürün Ekle</div></div>
+      <div id="urun-add"></div>
+      <p id="urun-msg"></p>
+    </div>
   `;
   const profile = await getCurrentProfile();
   const isManager = hasRole(profile, 'depo_yonetici');
@@ -23,19 +28,22 @@ export async function renderUrunler(container) {
 
   const addBox = container.querySelector('#urun-add');
   addBox.innerHTML = `
-    <h3>Yeni Ürün Ekle</h3>
-    <form id="urun-add-form" style="display:flex;flex-direction:column;gap:0.5rem;max-width:360px;">
-      <input type="text" id="new-urun-code" placeholder="Ürün kodu (örn. YIY01000999)" required />
-      <input type="text" id="new-urun-name" placeholder="Ürün adı" required />
-      <select id="new-urun-unit">
-        <option value="kg">kg</option>
-        <option value="ad">ad</option>
-      </select>
-      <select id="new-urun-category">
-        <option value="ET">ET</option>
-        <option value="BALIK">BALIK</option>
-      </select>
-      <button type="submit">Ekle</button>
+    <form id="urun-add-form" class="field-grid" style="align-items:end;">
+      <div class="field"><span class="field-label">Ürün Kodu</span><input type="text" id="new-urun-code" placeholder="örn. YIY01000999" required /></div>
+      <div class="field"><span class="field-label">Ürün Adı</span><input type="text" id="new-urun-name" required /></div>
+      <div class="field"><span class="field-label">Birim</span>
+        <select id="new-urun-unit">
+          <option value="kg">kg</option>
+          <option value="ad">ad</option>
+        </select>
+      </div>
+      <div class="field"><span class="field-label">Kategori</span>
+        <select id="new-urun-category">
+          <option value="ET">ET</option>
+          <option value="BALIK">BALIK</option>
+        </select>
+      </div>
+      <button type="submit" class="btn-accent" style="grid-column:1 / -1;justify-self:start;">Ekle</button>
     </form>
   `;
   addBox.querySelector('#urun-add-form').addEventListener('submit', async (e) => {
@@ -49,19 +57,21 @@ export async function renderUrunler(container) {
       });
       await renderUrunler(container);
       const msg = container.querySelector('#urun-msg');
-      msg.style.color = 'green';
+      msg.style.color = 'var(--color-success-text)';
       msg.textContent = 'Ürün eklendi.';
     } catch (err) {
       const msg = container.querySelector('#urun-msg');
-      msg.style.color = '#b00020';
+      msg.style.color = 'var(--color-danger-text)';
       msg.textContent = err.code === '23505' ? 'Hata: Bu ürün kodu zaten kayıtlı.' : 'Hata: ' + err.message;
     }
   });
 
   if (!isManager) {
-    container.querySelector('h2').insertAdjacentHTML(
-      'afterend',
-      '<p style="color:#666;font-size:0.9rem;">Not: Ürün düzenleme/silme yetkisi sadece depo yöneticisindedir.</p>'
+    // NOT: container'da artık iki `.card-header-title` var (Ara / Ekle kartları) — bkz. firmalar.js
+    // Step 2'deki aynı düzeltme. Notu container'ın en sonuna ekliyoruz.
+    container.insertAdjacentHTML(
+      'beforeend',
+      '<p style="color:var(--color-label);font-size:0.85rem;">Not: Ürün düzenleme/silme yetkisi sadece depo yöneticisindedir.</p>'
     );
   }
 }
