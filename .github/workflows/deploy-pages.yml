@@ -27,7 +27,9 @@ jobs:
       - name: Node.js kur
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # jsdom@30, package.json'da node ^22.22.2 || ^24.15.0 || >=26.0.0 şartı koyuyor;
+          # Node 20 ile testler "webidl.util.markAsUncloneable is not a function" hatasıyla çöküyor.
+          node-version: 24
           cache: npm
 
       - name: Bağımlılıkları yükle
