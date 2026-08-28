@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mkkSembolu } from '../src/lib/mkk.js';
+import { mkkSembolu, MKK_ACIKLAMA_METNI } from '../src/lib/mkk.js';
 
 describe('mkkSembolu', () => {
   it('uygun için + döner', () => {
@@ -16,5 +16,13 @@ describe('mkkSembolu', () => {
 
   it('bilinmeyen değer için boş string döner', () => {
     expect(mkkSembolu('gecersiz')).toBe('');
+  });
+});
+
+describe('MKK_ACIKLAMA_METNI', () => {
+  it('gerçek şablonun A20 hücresindeki metinle birebir eşleşir', () => {
+    expect(MKK_ACIKLAMA_METNI).toBe(
+      'Denetim sırasında UYGUN OLMADIĞI görülen durumlar için – yazılacaktır. Açıklama kısmında ise uygunsuzluğun tanımı yapılacak.'
+    );
   });
 });

@@ -2,7 +2,7 @@ import { getReceiptDetail } from '../lib/receipts.js';
 import { getQueryParam } from '../router.js';
 import { paginateRows, ROWS_PER_PAGE } from '../lib/pagination.js';
 import { escapeHtml } from '../lib/html.js';
-import { mkkSembolu, evetHayirYokBilgi } from '../lib/mkk.js';
+import { mkkSembolu, evetHayirYokBilgi, MKK_ACIKLAMA_METNI } from '../lib/mkk.js';
 
 // Kullanıcının paylaştığı gerçek forma ait doküman kontrol bilgileri (Doküman No:F.22,
 // Yayın Tarihi:15.02.2026, Rev.Tarihi/No:/00). Form revize edilirse burası güncellenir.
@@ -89,7 +89,7 @@ export async function renderMalKabulCiktisi(container) {
             <div>Kalite Notu: ${escapeHtml(receipt.quality_note || '-')}</div>
             <div class="print-legend">
               <strong>Not:</strong> Denetim sırasında UYGUN görülen durumlar için ilgili kolona <strong>+</strong> yazılacaktır.
-              Denetim sırasında UYGUN OLMADIĞI görülen durumlar için ise uygunsuzluğun tanımı yapılacaktır.
+              ${MKK_ACIKLAMA_METNI}
               Mal Kabul Kriterleri: Gıda malzemesinin uygunluğu için Hammadde Özellikleri Tablosu niteliklerine bakılır.
               ${RISK_LEGEND}
             </div>`
