@@ -9,7 +9,7 @@ import { renderArama } from './pages/arama.js';
 import { renderMalKabulCiktisi } from './pages/mal-kabul-ciktisi.js';
 import { escapeHtml } from './lib/html.js';
 import { registerRoute, startRouter, navigate } from './router.js';
-import { renderOfflineBanner } from './components/offline-banner.js';
+import { renderOfflineBanner, refreshOfflineBanner } from './components/offline-banner.js';
 import { syncQueuedReceipts } from './lib/offline-queue.js';
 import { registerSW } from 'virtual:pwa-register';
 
@@ -25,11 +25,16 @@ const app = document.querySelector('#app');
 async function trySync() {
   if (!navigator.onLine) return;
   try {
-    const { synced, failed } = await syncQueuedReceipts();
+    const { synced, failed, skipped } = await syncQueuedReceipts();
     if (synced > 0) console.info(`${synced} bekleyen mal kabul kaydı senkronize edildi.`);
     if (failed > 0) console.warn(`${failed} kayıt senkronize edilemedi, tekrar denenecek.`);
+    if (skipped > 0) console.info(`${skipped} kayıt başka bir kullanıcıya ait olduğu için bu turda atlandı.`);
   } catch (err) {
     console.warn('Kuyruk senkronizasyonu sırasında beklenmeyen hata:', err.message);
+  } finally {
+    // Senkron denemesinin sonucu ne olursa olsun (0 senkron edilmiş olsa bile) banner'daki
+    // bekleyen kayıt sayısının güncel kalması için (final review bulgusu 4).
+    refreshOfflineBanner();
   }
 }
 

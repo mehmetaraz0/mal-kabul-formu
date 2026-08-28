@@ -11,10 +11,30 @@
 -- kayıt asla senkronize olamaz, sonsuza kadar kuyrukta "başarısız" kalır. Bu, offline kuyruğun
 -- tüm amacını (bağlantı gelince otomatik ve GÜVENİLİR senkron) geçersiz kılan ciddi bir hata.
 --
--- Çözüm: hem receipts hem receipt_items insert'lerine `on conflict` ekleyerek RPC'yi gerçekten
--- idempotent hale getiriyoruz. Parametre listesi (tip ve sıra) 0008'dekiyle birebir aynı
--- kaldığından `create or replace` yeterli — yeni bir overload oluşmaz, eski imzayı düşürmeye
--- gerek yok (0007/0008'in aksine, orada parametre sayısı değişiyordu).
+-- DÜZELTME TURU (final review bulgusu 1): İLK deneme (`on conflict (client_uuid) do update
+-- set client_uuid = excluded.client_uuid returning id into v_receipt_id`) YANLIŞTI. Postgres,
+-- `INSERT ... ON CONFLICT DO UPDATE`'te çakışan satıra karşı hedef tablonun UPDATE RLS
+-- politikasının `USING` ifadesini de değerlendirir (WCO_RLS_CONFLICT_CHECK). Buradaki
+-- `receipts_update_manager_draft` politikasının `USING`'i sadece `status = 'taslak' AND
+-- received_by = auth.uid()` (depo_yonetici, kendi taslağı) veya `status = 'kalite_bekliyor'`
+-- (kalite_ekibi) satırlarına izin verir. Kayıt ilk denemede "Kaydet ve Kalite Onayına Gönder"
+-- ile kaydedilip zaten 'kalite_bekliyor'/'onaylandi'/'reddedildi'ye taşınmışsa, bir retry'ın
+-- DO UPDATE'i bu USING kontrolünü geçemez ve `42501` (insufficient_privilege / RLS ihlali) ile
+-- patlar — aynı "kayıt sonsuza kadar kuyrukta kilitli kalır" sorunu, sadece 23505 yerine 42501
+-- olarak yeniden ortaya çıkar. `onaylandi`/`reddedildi` durumundaki bir kayıt için politika hiç
+-- bir USING dalına girmediğinden orada da aynı şekilde patlar.
+--
+-- DOĞRU YAKLAŞIM: `on conflict (client_uuid) do NOTHING returning id into v_receipt_id`, sonra
+-- `v_receipt_id is null` ise (çakışma oldu demek) mevcut satırın id'sini `select` ile oku ve
+-- ERKEN DÖN — items insert'e ve submit-to-quality bloğuna HİÇ girme. `do nothing` hiçbir UPDATE
+-- üretmediğinden hiçbir UPDATE RLS politikası hiç değerlendirilmez — RLS sorunu tamamen ortadan
+-- kalkar. Bu aynı zamanda doğru: RPC gövdesi tek bir örtük transaction'dır, dolayısıyla
+-- `client_uuid` çakışması = önceki çağrının (receipt + TÜM satırları + varsa submit-to-quality
+-- durumu dahil) TAMAMEN commit olduğunun KANITIdır — aksi halde transaction geri alınır,
+-- client_uuid hiçbir zaman kalıcı olarak var olmazdı. Yapılacak başka bir şey yok; aynı id'yi
+-- döndürmek yeterli. Bu yaklaşım ayrıca `receipt_items_insert_manager` RLS politikasının
+-- 'kalite_bekliyor' durumundaki bir receipt'e (retry'da) satır eklemeyi reddetme sorununu da
+-- bir kerede ortadan kaldırır, çünkü items insert'e artık hiç girilmiyor.
 
 create or replace function create_receipt_with_items(
   p_company_id bigint,
@@ -40,15 +60,10 @@ begin
     raise exception 'En az bir ürün satırı gerekli';
   end if;
 
-  -- `on conflict (client_uuid) do update set client_uuid = excluded.client_uuid`: kasıtlı bir
-  -- no-op güncelleme. Amacımız satırı değiştirmek değil, `returning ... into` ile VAR OLAN
-  -- satırın id'sini almak (plain `on conflict do nothing` RETURNING'de hiçbir şey döndürmez,
-  -- bu yüzden do nothing kullanamıyoruz). client_uuid zaten aynı değere eşitlendiği için
-  -- `lock_receipt_core_fields` trigger'ındaki `new.client_uuid is distinct from old.client_uuid`
-  -- kontrolü false'a değerlendirilir ve trigger istisna fırlatmaz — diğer tüm alanlar (company_id,
-  -- received_by, receipt_date, irsaliye_no, siparis_no) bu UPDATE'te hiç SET edilmediğinden
-  -- (eski değerlerini korurlar) o kontroller de tetiklenmez. `set_receipts_updated_at` trigger'ı
-  -- yine de çalışıp updated_at'i günceller — bu zararsızdır (sadece "son denendiği zaman"ı yansıtır).
+  -- UYARI: bu insert'e asla bir `on conflict (client_uuid) do update ...` SET listesi eklenmesin
+  -- (ör. "madem buradayız, diğer alanları da güncelleyelim" gibi bir gerekçeyle) — yukarıdaki
+  -- açıklamada anlatılan RLS UPDATE-politikası sorununu geri getirir. `do nothing` + aşağıdaki
+  -- erken-dönüş bilerek tercih edildi, bu insert bir UPDATE'e ASLA dönüşmemeli.
   insert into receipts (
     client_uuid, company_id, receipt_date, irsaliye_no, siparis_no, received_by, status,
     fatura_no, arac_hijyen_uygun, arac_sicaklik
@@ -57,16 +72,22 @@ begin
     p_client_uuid, p_company_id, p_receipt_date, p_irsaliye_no, p_siparis_no, p_received_by, 'taslak',
     p_fatura_no, p_arac_hijyen_uygun, p_arac_sicaklik
   )
-  on conflict (client_uuid) do update set client_uuid = excluded.client_uuid
+  on conflict (client_uuid) do nothing
   returning id into v_receipt_id;
 
-  -- `on conflict (receipt_id, line_no) do nothing` (kısıt zaten 0004'te bu senaryo için
-  -- eklenmişti: receipt_items_receipt_line_unique). BİLEREK `do update` DEĞİL `do nothing`:
-  -- bir retry, kalite ekibinin bu satır için o ana kadar girmiş olabileceği uygunluk/note
-  -- değerini asla ezmemeli. Ayrıca `do nothing` bir UPDATE üretmediğinden
-  -- `lock_receipt_item_fields_for_quality_trigger` (before UPDATE) hiç tetiklenmez — dolayısıyla
-  -- kalite_ekibi rolündeki birinin retry SIRASINDA bu satırı işaretlemiş olması ile bir yarış
-  -- durumu oluşmaz; retry satırı sessizce atlar, kalite_ekibi'nin girdiği değer olduğu gibi kalır.
+  if v_receipt_id is null then
+    -- Çakışma: bu client_uuid'li receipt daha önce (bu RPC'nin önceki bir çağrısında) zaten
+    -- TAMAMEN oluşturulmuş — receipt + tüm satırlar + (varsa) kalite onayına gönderme dahil,
+    -- çünkü tek transaction'da hepsi ya birlikte commit olur ya da hiçbiri kalıcı olmaz. Bu
+    -- yüzden items insert'e ve p_submit_to_quality bloğuna HİÇ girmeden, var olan id'yi bulup
+    -- aynen döndürüyoruz — idempotent davranış budur, "yapılacak iş yok".
+    select id into v_receipt_id from receipts where client_uuid = p_client_uuid;
+    return v_receipt_id;
+  end if;
+
+  -- Bu noktaya sadece v_receipt_id TAZE (bu çağrıda yeni insert edilmiş) bir satırsa gelinir —
+  -- dolayısıyla bu receipt_id için receipt_items'ta önceden satır olması mümkün değil (yeni
+  -- üretilmiş bir uuid). Bu yüzden burada bir `on conflict` gerekmiyor: çakışma ihtimali yok.
   insert into receipt_items (
     receipt_id, product_id, line_no, lot_no, skt, quantity, unit, uygunluk,
     urun_sicakligi, yari_omur_gecti
@@ -82,15 +103,8 @@ begin
     'beklemede',
     nullif(item->>'urunSicakligi', '')::numeric,
     coalesce((item->>'yariOmurGecti')::boolean, false)
-  from jsonb_array_elements(p_items) as item
-  on conflict (receipt_id, line_no) do nothing;
+  from jsonb_array_elements(p_items) as item;
 
-  -- `and status = 'taslak'`: retry sırasında kayıt zaten kalite_bekliyor/onaylandı/reddedildi
-  -- olmuşsa (ör. ilk deneme zaten submit etmişti, ya da kalite ekibi bu arada işlem yapmıştı)
-  -- bu UPDATE 0 satır etkiler ve status'u GERİ ALMAZ. WHERE eşleşmediğinde PostgREST/RPC
-  -- tarafında `error: null` döner (bu, receipts.js'teki diğer fonksiyonların neden `.select()`
-  -- ile satır sayısını ayrıca doğruladığının aynı nedeni — burada risk yok çünkü zaten "hiçbir
-  -- şey yapma" istediğimiz durum budur, hata değil).
   if p_submit_to_quality then
     update receipts set status = 'kalite_bekliyor' where id = v_receipt_id and status = 'taslak';
   end if;

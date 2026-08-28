@@ -6,6 +6,7 @@ import { getCurrentProfile, hasRole } from '../lib/auth.js';
 import { escapeHtml } from '../lib/html.js';
 import { isNetworkError } from '../lib/offline-cache.js';
 import { enqueueReceipt } from '../lib/offline-queue.js';
+import { refreshOfflineBanner } from '../components/offline-banner.js';
 
 export async function renderYeniKabul(container) {
   const profile = await getCurrentProfile();
@@ -124,13 +125,28 @@ export async function renderYeniKabul(container) {
     const msg = container.querySelector('#kabul-msg');
     const buttons = [container.querySelector('#save-draft-btn'), container.querySelector('#submit-quality-btn')];
     msg.textContent = '';
+
+    // Yerel doğrulamalar SENKRON ve try/catch'in DIŞINDA çalışır — bilerek. `isNetworkError`,
+    // `!navigator.onLine` iken hatanın gerçek türüne BAKMADAN true döner (bkz. offline-cache.js).
+    // Bu kontroller aşağıdaki ağ-hatası-yakalayan try/catch'in İÇİNDE olsaydı, kullanıcı
+    // çevrimdışıyken tetiklenen bir yerel doğrulama hatası (firma seçilmemiş, miktar<=0) "ağ
+    // hatası" sanılıp kuyruğa yazılırdı — ve o kayıt senkronize edilmeye çalışıldığında AYNI
+    // yerel hatayla sonsuza dek başarısız kalırdı (asla düzeltilemeyen "zehirli" bir kuyruk
+    // kaydı). Bu yüzden burada erken dönüyoruz; kuyruğa yazma yolu hiç açılmıyor.
+    if (!state.companyId) {
+      msg.style.color = '#b00020';
+      msg.textContent = 'Hata: Lütfen bir firma seçin';
+      return;
+    }
+    if (state.items.some((item) => !(item.quantity > 0))) {
+      msg.style.color = '#b00020';
+      msg.textContent = "Hata: Tüm satırların miktarı 0'dan büyük olmalı";
+      return;
+    }
+
     // Çift gönderim engeli: yavaş bir kayıt sırasında ikinci bir tıklama ikinci bir kayıt yaratmasın.
     buttons.forEach((btn) => { btn.disabled = true; });
     try {
-      if (!state.companyId) throw new Error('Lütfen bir firma seçin');
-      if (state.items.some((item) => !(item.quantity > 0))) {
-        throw new Error('Tüm satırların miktarı 0\'dan büyük olmalı');
-      }
       // RPC tek çağrıda hem kaydı hem satırları oluşturur, sendToQuality ise aynı transaction
       // içinde kalite onayına gönderir (öksüz taslak kalmaz).
       const aracHijyenValue = container.querySelector('#kabul-arac-hijyen').value;
@@ -146,7 +162,12 @@ export async function renderYeniKabul(container) {
         irsaliyeNo: container.querySelector('#kabul-irsaliye').value,
         siparisNo: container.querySelector('#kabul-siparis').value,
         receivedBy: profile.id,
-        items: state.items,
+        // Derin kopya (öğe başına yeni nesne): aşağıdaki `await enqueueReceipt(...)` sırasında
+        // kullanıcı tabloda başka bir satırı düzenlerse (input change event'i state.items'ı
+        // doğrudan mutasyona uğratıyor), kuyruğa zaten yazılmış olan payload'ın sessizce
+        // değişmesini engeller — kuyruktaki kayıt, "Taslak Kaydet"e basıldığı andaki değerleri
+        // donuk (immutable) olarak saklamalı.
+        items: state.items.map((item) => ({ ...item })),
         faturaNo: container.querySelector('#kabul-fatura').value,
         aracHijyenUygun: aracHijyenValue === '' ? null : aracHijyenValue === 'true',
         aracSicaklik: aracSicaklikValue ? Number(aracSicaklikValue) : null
@@ -162,6 +183,7 @@ export async function renderYeniKabul(container) {
         // sonsuza kadar bekler (Global Constraint, plan dokümanı).
         if (!isNetworkError(err)) throw err;
         await enqueueReceipt({ clientUuid, payload, sendToQuality });
+        await refreshOfflineBanner();
         msg.style.color = '#a15c00';
         msg.textContent = 'Çevrimdışısınız — kayıt cihazda bekletildi, bağlantı gelince otomatik gönderilecek.';
       }
