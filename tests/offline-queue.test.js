@@ -41,7 +41,10 @@ vi.mock('idb-keyval', () => ({
   })
 }));
 
-import { enqueueReceipt, listQueuedReceipts, syncQueuedReceipts } from '../src/lib/offline-queue.js';
+// isNetworkError BİLEREK mock'lanmıyor — syncQueuedReceipts'in ağ/uygulama hatası ayrımının
+// GERÇEK sınıflandırıcıyla (save()'in kullandığı aynı fonksiyonla) doğru çalıştığını test
+// etmek istiyoruz.
+import { enqueueReceipt, listQueuedReceipts, syncQueuedReceipts, retryDelayMs } from '../src/lib/offline-queue.js';
 
 function deferred() {
   let resolve, reject;
@@ -192,7 +195,7 @@ describe('offline-queue', () => {
     const firstCall = syncQueuedReceipts();
     await invoked.promise;
     const secondCall = await syncQueuedReceipts();
-    expect(secondCall).toEqual({ synced: 0, failed: 0, skipped: 0 });
+    expect(secondCall).toEqual({ synced: 0, failed: 0, skipped: 0, deferred: 0 });
     expect(createReceiptWithItems).toHaveBeenCalledTimes(1); // ikinci çağrı hiç RPC tetiklemedi
 
     gate.resolve('server-id-1');
@@ -224,5 +227,85 @@ describe('offline-queue', () => {
     const remaining = await listQueuedReceipts();
     expect(remaining).toHaveLength(1);
     expect(remaining[0].clientUuid).toBe('c2'); // c2 kaybolmadı, kuyrukta kaldı
+  });
+
+  // --- Final review bulgusu 4: ağ hatası / uygulama hatası ayrımı ------------------------------
+
+  it('ag hatasi network olarak siniflandirilir ve geri cekilme UYGULANMAZ', async () => {
+    await enqueueReceipt({ clientUuid: 'c1', payload: { companyId: 1, items: [], receivedBy: 'u1' }, sendToQuality: false });
+    createReceiptWithItems.mockRejectedValue({ message: 'TypeError: Failed to fetch', details: '', hint: '', code: '' });
+
+    await syncQueuedReceipts();
+
+    const [entry] = await listQueuedReceipts();
+    expect(entry.lastErrorKind).toBe('network');
+    expect(entry.nextAttemptAt).toBeNull();
+
+    // Geri çekilme olmadığı için bir sonraki tur HEMEN tekrar dener.
+    const second = await syncQueuedReceipts();
+    expect(second.failed).toBe(1);
+    expect(second.deferred).toBe(0);
+    expect((await listQueuedReceipts())[0].attempts).toBe(2);
+  });
+
+  it('uygulama hatasi (FK ihlali) application olarak siniflandirilir ve geri cekilir', async () => {
+    await enqueueReceipt({ clientUuid: 'c1', payload: { companyId: 1, items: [], receivedBy: 'u1' }, sendToQuality: false });
+    // Gerçek Postgres FK ihlali şekli: code DOLU (23503) — isNetworkError bunu ağ hatası saymaz.
+    createReceiptWithItems.mockRejectedValue({
+      message: 'insert or update on table "receipt_items" violates foreign key constraint',
+      details: 'Key (product_id)=(42) is not present in table "products".',
+      hint: null,
+      code: '23503'
+    });
+
+    const first = await syncQueuedReceipts();
+    expect(first.failed).toBe(1);
+
+    const [entry] = await listQueuedReceipts();
+    expect(entry.lastErrorKind).toBe('application');
+    expect(entry.attempts).toBe(1);
+    expect(Date.parse(entry.nextAttemptAt)).toBeGreaterThan(Date.now());
+    expect(entry.lastError).toMatch(/foreign key constraint/);
+
+    // Pencere dolmadan yapılan ikinci tur RPC'yi HİÇ çağırmaz — "ertelendi" sayılır, attempts
+    // artmaz (aksi halde 30 saniyelik periyodik tetikleyici aynı bozuk kaydı sonsuza dek
+    // sunucuya göndermeye çalışırdı).
+    createReceiptWithItems.mockClear();
+    const second = await syncQueuedReceipts();
+    expect(createReceiptWithItems).not.toHaveBeenCalled();
+    expect(second).toEqual({ synced: 0, failed: 0, skipped: 0, deferred: 1 });
+    expect((await listQueuedReceipts())[0].attempts).toBe(1);
+  });
+
+  it('geri cekilme penceresi dolunca kayit tekrar denenir (kalici olarak atilmaz)', async () => {
+    await enqueueReceipt({ clientUuid: 'c1', payload: { companyId: 1, items: [], receivedBy: 'u1' }, sendToQuality: false });
+    createReceiptWithItems.mockRejectedValue({ message: 'FK ihlali', details: '', hint: null, code: '23503' });
+    await syncQueuedReceipts();
+
+    const [entry] = await listQueuedReceipts();
+    const windowEnd = Date.parse(entry.nextAttemptAt);
+
+    // Zamanı pencerenin bir saniye ötesine taşı — kayıt "kalıcı" damgası yemiş olsa bile
+    // (ör. silinmiş ürün geri eklenmişse) tekrar denenmeli.
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(windowEnd + 1000);
+    try {
+      createReceiptWithItems.mockReset();
+      createReceiptWithItems.mockResolvedValue('server-id-1');
+      const result = await syncQueuedReceipts();
+      expect(result.synced).toBe(1);
+      expect(result.deferred).toBe(0);
+      expect(await listQueuedReceipts()).toHaveLength(0);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  it('retryDelayMs ustel artar ve 1 saatte tavanlanir', () => {
+    expect(retryDelayMs(1)).toBe(60_000);
+    expect(retryDelayMs(2)).toBe(120_000);
+    expect(retryDelayMs(3)).toBe(240_000);
+    expect(retryDelayMs(7)).toBe(60 * 60_000);
+    expect(retryDelayMs(99)).toBe(60 * 60_000); // taşma/sonsuz erteleme yok
+    expect(retryDelayMs(0)).toBe(60_000);
   });
 });

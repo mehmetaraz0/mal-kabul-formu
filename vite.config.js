@@ -4,7 +4,13 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig({
   plugins: [
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'autoUpdate' DEĞİL: yeni bir deploy yayınlandığında service worker hemen skipWaiting
+      // yapıp sayfayı habersizce yeniliyordu. Mal kabul formunda taslak kalıcılığı olmadığı için
+      // bu, formu doldurmakta olan bir kullanıcının girdiği tüm satırları sessizce yok ederdi.
+      // 'prompt' ile yeni sürüm beklemede kalır; main.js'teki registerSW({ onNeedRefresh })
+      // kullanıcıya "Yeni sürüm mevcut / Yenile" çubuğunu gösterir ve güncelleme ancak kullanıcı
+      // onaylayınca uygulanır.
+      registerType: 'prompt',
       includeAssets: ['icons/icon-192.png', 'icons/icon-512.png'],
       manifest: {
         name: 'Mal Kabul Formu',

@@ -21,10 +21,9 @@ export function isNetworkError(err) {
 }
 
 export async function cacheAside(key, fetchFn) {
+  let result;
   try {
-    const result = await fetchFn();
-    localStorage.setItem(key, JSON.stringify(result));
-    return result;
+    result = await fetchFn();
   } catch (err) {
     if (isNetworkError(err)) {
       const cached = localStorage.getItem(key);
@@ -32,4 +31,18 @@ export async function cacheAside(key, fetchFn) {
     }
     throw err;
   }
+
+  // Önbelleğe YAZMA best-effort'tur: `localStorage.setItem` kota aşımında (QuotaExceededError) ya
+  // da Safari'nin gizli modunda (storage tamamen devre dışı) fırlatabilir. Bu, BAŞARIYLA çekilmiş
+  // gerçek veriyi asla hataya çevirmemeli. Eski hali `setItem`'ı fetch ile aynı try bloğunda
+  // tutuyordu; bu yüzden bir kota hatası ya (a) doğrudan çağırana fırlıyor ve sayfayı "Bir hata
+  // oluştu"ya düşürüyor, ya da (b) daha kötüsü — `!navigator.onLine` iken `isNetworkError` true
+  // döndüğü için — TAZE veriyi atıp BAYAT önbellek değerini döndürüyordu. Yazmayı kendi
+  // try/catch'ine almak her iki durumu da ortadan kaldırıyor.
+  try {
+    localStorage.setItem(key, JSON.stringify(result));
+  } catch {
+    // Yoksay: önbellek yazılamadı, ama elimizde taze veri var — çağıran onu almalı.
+  }
+  return result;
 }

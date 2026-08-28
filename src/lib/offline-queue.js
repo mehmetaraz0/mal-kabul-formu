@@ -1,8 +1,24 @@
 import { get, update } from 'idb-keyval';
 import { createReceiptWithItems } from './receipts.js';
 import { supabase } from './supabase.js';
+import { isNetworkError } from './offline-cache.js';
 
 const QUEUE_KEY = 'offline-receipt-queue';
+
+// Uygulama hatası (ağ hatası DEĞİL) alan kayıtlar için üstel geri çekilme. Neden gerekli:
+// main.js artık `online` event'ine EK OLARAK her 30 saniyede bir senkron deniyor (final review
+// bulgusu 3). Bu yedek tetikleyici olmadan kalıcı bir uygulama hatası (ör. senkron öncesi silinmiş
+// bir firma/ürün → FK ihlali) sadece bağlantı değişimlerinde tekrar denenirdi; 30 saniyelik
+// periyotla ise günde ~2880 kez, hep aynı hatayla, sunucuya gidip gelirdi. Ağ hataları BU
+// geri çekilmeye tabi DEĞİL — bağlantı geri geldiğinde ilk turda hemen denensin diye.
+const RETRY_BASE_MS = 60_000;
+const RETRY_MAX_MS = 60 * 60_000; // 1 saat tavan: hiçbir kayıt "sonsuza dek ertelenmiş" kalmasın
+
+export function retryDelayMs(attempts) {
+  const n = Math.max(1, attempts || 1);
+  // 2**n hızla taşmasın diye üs sınırlanıyor (2**30 * 60s zaten tavanın çok üstünde).
+  return Math.min(RETRY_BASE_MS * 2 ** Math.min(n - 1, 30), RETRY_MAX_MS);
+}
 
 async function readQueue() {
   return (await get(QUEUE_KEY)) || [];
@@ -15,7 +31,16 @@ export async function enqueueReceipt({ clientUuid, payload, sendToQuality }) {
   // kendi yazmasıyla arada çakışıp birbirini ezmesi mümkün değil (final review bulgusu 3).
   await update(QUEUE_KEY, (queue = []) => [
     ...queue,
-    { clientUuid, payload, sendToQuality, queuedAt: new Date().toISOString(), attempts: 0, lastError: null }
+    {
+      clientUuid,
+      payload,
+      sendToQuality,
+      queuedAt: new Date().toISOString(),
+      attempts: 0,
+      lastError: null,
+      lastErrorKind: null,
+      nextAttemptAt: null
+    }
   ]);
 }
 
@@ -34,13 +59,30 @@ async function removeFromQueue(clientUuid) {
   await update(QUEUE_KEY, (queue = []) => queue.filter((e) => e.clientUuid !== clientUuid));
 }
 
-async function recordFailure(clientUuid, message) {
+// `save()` (yeni-kabul.js) ağ hatası / uygulama hatası ayrımını `isNetworkError` ile yapıyor;
+// senkron tarafı bu ayrımı hiç yapmıyordu — her hata aynı şekilde sonsuza dek, aynı sıklıkta
+// yeniden deneniyordu (final review bulgusu 4). Artık aynı referans deseni burada da kullanılıyor:
+//  - 'network'     → geçici kabul edilir, bir sonraki turda hemen tekrar denenir.
+//  - 'application' → kalıcı olma ihtimali yüksek (FK ihlali, RLS reddi, doğrulama hatası);
+//                    üstel geri çekilmeyle denenir ve banner'da kullanıcıya gösterilir.
+// Kayıt HİÇBİR durumda kuyruktan atılmıyor ("kalıcı" sandığımız bir hata, silinmiş bir ürünün
+// geri eklenmesiyle pekâlâ düzelebilir) — sadece deneme sıklığı düşürülüyor ve görünür kılınıyor.
+async function recordFailure(clientUuid, err) {
+  const message = (err && err.message) || String(err) || 'Bilinmeyen hata';
+  const kind = isNetworkError(err) ? 'network' : 'application';
   await update(QUEUE_KEY, (queue = []) =>
-    queue.map((e) =>
-      e.clientUuid === clientUuid
-        ? { ...e, attempts: (e.attempts || 0) + 1, lastError: message || 'Bilinmeyen hata' }
-        : e
-    )
+    queue.map((e) => {
+      if (e.clientUuid !== clientUuid) return e;
+      const attempts = (e.attempts || 0) + 1;
+      return {
+        ...e,
+        attempts,
+        lastError: message,
+        lastErrorKind: kind,
+        nextAttemptAt:
+          kind === 'application' ? new Date(Date.now() + retryDelayMs(attempts)).toISOString() : null
+      };
+    })
   );
 }
 
@@ -64,7 +106,7 @@ let syncInFlight = false;
 // sayesinde hata fırlatmaz — aynı receipt id'yi idempotent şekilde döner.
 export async function syncQueuedReceipts() {
   if (syncInFlight) {
-    return { synced: 0, failed: 0, skipped: 0 };
+    return { synced: 0, failed: 0, skipped: 0, deferred: 0 };
   }
   syncInFlight = true;
   try {
@@ -73,7 +115,7 @@ export async function syncQueuedReceipts() {
     // `recordFailure` ile TEK TEK ve atomik yapılıyor, bu yüzden bu snapshot'ın "bayat" olması
     // veri kaybına yol açmaz (bkz. removeFromQueue'nun yorumu).
     const queue = await readQueue();
-    if (queue.length === 0) return { synced: 0, failed: 0, skipped: 0 };
+    if (queue.length === 0) return { synced: 0, failed: 0, skipped: 0, deferred: 0 };
 
     // Paylaşımlı depo tableti senaryosu (final review bulgusu 5): kuyruktaki bir kayıt A
     // kullanıcısı adına oluşturulmuş olabilir, ama şu an B kullanıcısı oturum açmış olabilir.
@@ -92,8 +134,16 @@ export async function syncQueuedReceipts() {
     let synced = 0;
     let failed = 0;
     let skipped = 0;
+    let deferred = 0;
 
     for (const entry of queue) {
+      // Üstel geri çekilme penceresi henüz dolmadıysa (yalnızca uygulama hataları için ayarlanır,
+      // bkz. recordFailure) bu turda hiç deneme yapma. "Başarısız" SAYILMIYOR — attempts artmıyor,
+      // lastError değişmiyor; kayıt kuyrukta ve banner'da görünür kalmaya devam ediyor.
+      if (entry.nextAttemptAt && Date.parse(entry.nextAttemptAt) > Date.now()) {
+        deferred += 1;
+        continue;
+      }
       const receivedBy = entry.payload?.receivedBy;
       if (receivedBy && receivedBy !== currentUserId) {
         // Bu kayıt şu anki oturum sahibine ait değil (ya da hiç oturum yok) — bu turda hiç
@@ -112,11 +162,11 @@ export async function syncQueuedReceipts() {
         synced += 1;
       } catch (err) {
         failed += 1;
-        await recordFailure(entry.clientUuid, err?.message || String(err));
+        await recordFailure(entry.clientUuid, err);
       }
     }
 
-    return { synced, failed, skipped };
+    return { synced, failed, skipped, deferred };
   } finally {
     syncInFlight = false;
   }

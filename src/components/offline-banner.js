@@ -12,6 +12,24 @@ import { listQueuedReceipts } from '../lib/offline-queue.js';
 let currentBannerEl = null;
 let listenersRegistered = false;
 
+const MAX_ERROR_CHARS = 90;
+
+function summarizeError(message) {
+  const text = String(message).replace(/\s+/g, ' ').trim();
+  return text.length > MAX_ERROR_CHARS ? `${text.slice(0, MAX_ERROR_CHARS - 1)}…` : text;
+}
+
+// Kuyrukta hata almış kayıtlar arasından kullanıcıya GÖSTERİLECEK olanı seçer.
+// Öncelik "application" türündeki hatada: bu, kalıcı olma ihtimali yüksek (silinmiş firma/ürün →
+// FK ihlali, RLS reddi) ve kullanıcının GERÇEKTEN görmesi gereken hatadır. Böyle bir kayıt yoksa
+// en son ağ hatası alan kayda düşülür.
+export function pickFailingEntry(entries) {
+  const withError = entries.filter((e) => e && e.lastError);
+  if (withError.length === 0) return null;
+  const appError = withError.filter((e) => e.lastErrorKind === 'application').pop();
+  return appError || withError[withError.length - 1];
+}
+
 async function updateBanner() {
   if (!currentBannerEl) return;
   const offline = !navigator.onLine;
@@ -20,12 +38,14 @@ async function updateBanner() {
   // edilecek" göstermesi planın orijinal dosya-yapısı yorumunda vardı ama hiç uygulanmamıştı.
   // listQueuedReceipts idb-keyval'den okur; IndexedDB erişilemezse (ör. bazı gizli/özel
   // tarayıcı modları) banner'ın kendisi çökmesin diye savunmacı bir catch var.
-  let pending = 0;
+  let entries = [];
   try {
-    pending = (await listQueuedReceipts()).length;
+    entries = (await listQueuedReceipts()) || [];
   } catch {
-    pending = 0;
+    entries = [];
   }
+  const pending = entries.length;
+  const failing = pickFailingEntry(entries);
 
   // Elden kaçırdığımız bir render sırasında currentBannerEl başka bir renderOfflineBanner
   // çağrısıyla değişmiş olabilir (bu fonksiyon async, await sırasında araya girebilir) —
@@ -37,15 +57,30 @@ async function updateBanner() {
     return;
   }
 
+  const stuck = failing?.lastErrorKind === 'application';
   currentBannerEl.style.display = 'block';
-  currentBannerEl.style.background = offline ? '#b00020' : '#a15c00';
+  currentBannerEl.style.background = offline || stuck ? '#b00020' : '#a15c00';
+
+  let text;
   if (offline) {
-    currentBannerEl.textContent = pending > 0
+    text = pending > 0
       ? `Çevrimdışısınız — ${pending} kayıt senkronize edilecek.`
       : 'Çevrimdışısınız — mal kabul kayıtları cihazda bekletilecek.';
   } else {
-    currentBannerEl.textContent = `${pending} kayıt senkronize edilecek...`;
+    text = `${pending} kayıt senkronize edilecek...`;
   }
+
+  // `lastError` Task 3'ten beri kuyrukta saklanıyordu ama HİÇBİR YERDE kullanıcıya
+  // gösterilmiyordu (final review bulgusu 4) — kalıcı olarak sıkışmış bir kayıt, kullanıcı
+  // açısından "senkronize edilecek" diye sonsuza kadar bekleyen sessiz bir kayıptı. Artık son
+  // hata banner'da özetleniyor; uygulama hatalarında ayrıca "kalıcı" uyarısı ve kırmızı zemin var.
+  if (failing) {
+    const attempts = failing.attempts || 0;
+    text += stuck
+      ? ` Bir kayıt gönderilemiyor (${attempts} deneme, son hata: ${summarizeError(failing.lastError)}). Lütfen yetkiliye bildirin.`
+      : ` (son hata: ${summarizeError(failing.lastError)})`;
+  }
+  currentBannerEl.textContent = text;
 }
 
 export function renderOfflineBanner(container) {

@@ -45,6 +45,41 @@ describe('cacheAside', () => {
     expect(result).toEqual([{ id: 99 }]);
   });
 
+  // Final review bulgusu 2: önbelleğe YAZMA best-effort olmalı — kota aşımı (QuotaExceededError)
+  // ya da Safari gizli modu (storage tamamen kapalı) BAŞARIYLA çekilmiş veriyi hataya
+  // çevirmemeli. Eski hali setItem'ı fetch ile aynı try bloğunda tutuyordu.
+  it('setItem hata firlatirsa bile fetch sonucunu doner (yazma best-effort)', async () => {
+    const spy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('QuotaExceededError', 'QuotaExceededError');
+    });
+    try {
+      const result = await cacheAside('test-key', () => Promise.resolve([{ id: 1 }]));
+      expect(result).toEqual([{ id: 1 }]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  // Eski (tek try bloğu) halinde bu senaryo daha da sinsiydi: çevrimdışıyken setItem patlarsa
+  // isNetworkError(quotaError) `!navigator.onLine` yüzünden true dönüyor ve TAZE veri atılıp
+  // BAYAT önbellek değeri döndürülüyordu.
+  it('cevrimdisi gorunurken setItem patlarsa bile BAYAT onbellek degil TAZE veri doner', async () => {
+    localStorage.setItem('test-key', JSON.stringify([{ id: 99 }]));
+    // jsdom'da navigator.onLine Navigator.prototype üzerinde bir getter'dır; örnek üzerinde kendi
+    // (configurable) getter'ımızı tanımlayıp sonra siliyoruz.
+    Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => false });
+    const setSpy = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('QuotaExceededError', 'QuotaExceededError');
+    });
+    try {
+      const result = await cacheAside('test-key', () => Promise.resolve([{ id: 1 }]));
+      expect(result).toEqual([{ id: 1 }]);
+    } finally {
+      setSpy.mockRestore();
+      delete window.navigator.onLine;
+    }
+  });
+
   it('supabase in RLS/validasyon hatasında (code dolu) önbelleğe düşmez, fırlatır', async () => {
     localStorage.setItem('test-key', JSON.stringify([{ id: 99 }]));
     const supabaseRlsError = {

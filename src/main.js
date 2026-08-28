@@ -13,9 +13,52 @@ import { renderOfflineBanner, refreshOfflineBanner } from './components/offline-
 import { syncQueuedReceipts } from './lib/offline-queue.js';
 import { registerSW } from 'virtual:pwa-register';
 
-registerSW({ immediate: true });
-
 const app = document.querySelector('#app');
+
+// Yeni bir sürüm yayına alındığında kullanıcıya gösterilen güncelleme çubuğu.
+// `#app` yerine doğrudan `document.body`'ye ekleniyor: renderApp() her çalıştığında
+// `app.innerHTML`'i tamamen değiştiriyor ve içine eklenmiş her şeyi koparıyor (offline-banner'ın
+// her render'da yeniden prepend edilmesinin sebebi de bu) — güncelleme çubuğu ise service worker
+// olayına bağlı, render döngüsünden bağımsız yaşamalı.
+function showUpdatePrompt(onAccept) {
+  if (document.getElementById('sw-update-prompt')) return;
+  const bar = document.createElement('div');
+  bar.id = 'sw-update-prompt';
+  bar.style.cssText =
+    'position:fixed;left:0;right:0;bottom:0;z-index:9999;background:#1e3a5f;color:white;' +
+    'padding:0.6rem 1rem;display:flex;gap:0.75rem;align-items:center;justify-content:center;' +
+    'flex-wrap:wrap;font-size:0.9rem;';
+
+  const label = document.createElement('span');
+  label.textContent = 'Yeni sürüm mevcut.';
+
+  const refreshBtn = document.createElement('button');
+  refreshBtn.id = 'sw-update-refresh';
+  refreshBtn.textContent = 'Yenile';
+  refreshBtn.addEventListener('click', () => {
+    bar.remove();
+    onAccept();
+  });
+
+  const laterBtn = document.createElement('button');
+  laterBtn.id = 'sw-update-later';
+  laterBtn.textContent = 'Daha sonra';
+  laterBtn.addEventListener('click', () => bar.remove());
+
+  bar.append(label, refreshBtn, laterBtn);
+  document.body.appendChild(bar);
+}
+
+// registerType artık 'autoUpdate' değil 'prompt' (bkz. vite.config.js): 'autoUpdate' yeni bir
+// deploy geldiğinde sayfayı HABERSİZCE yeniliyordu — mal kabul formunun taslak kalıcılığı
+// olmadığı için, tabletinde formu doldurmakta olan bir depo yöneticisi girdiği tüm satırları
+// kaybedebilirdi. Artık güncelleme kullanıcı "Yenile"ye basana kadar beklemede kalıyor.
+const updateSW = registerSW({
+  immediate: true,
+  onNeedRefresh() {
+    showUpdatePrompt(() => updateSW(true));
+  }
+});
 
 // Çevrimdışı kuyruktaki (idb-keyval) bekleyen mal kabul kayıtlarını göndermeyi dener.
 // syncQueuedReceipts kendi içinde her kayıt için ayrı ayrı try/catch yapar ve asla reject
@@ -25,10 +68,11 @@ const app = document.querySelector('#app');
 async function trySync() {
   if (!navigator.onLine) return;
   try {
-    const { synced, failed, skipped } = await syncQueuedReceipts();
+    const { synced, failed, skipped, deferred } = await syncQueuedReceipts();
     if (synced > 0) console.info(`${synced} bekleyen mal kabul kaydı senkronize edildi.`);
     if (failed > 0) console.warn(`${failed} kayıt senkronize edilemedi, tekrar denenecek.`);
     if (skipped > 0) console.info(`${skipped} kayıt başka bir kullanıcıya ait olduğu için bu turda atlandı.`);
+    if (deferred > 0) console.info(`${deferred} kayıt geri çekilme penceresi dolmadığı için bu turda ertelendi.`);
   } catch (err) {
     console.warn('Kuyruk senkronizasyonu sırasında beklenmeyen hata:', err.message);
   } finally {
@@ -43,6 +87,17 @@ async function trySync() {
 // olur, kayıt kuyrukta kalır ve bir sonraki denemede (login sonrası renderApp veya bir sonraki
 // online event'i) tekrar denenir. Zararsız, sadece gecikmeli bir retry.
 window.addEventListener('online', trySync);
+
+// PERİYODİK YEDEK TETİKLEYİCİ (final review bulgusu 3). `navigator.onLine` yalnızca ağ
+// ARAYÜZÜNÜN "yukarıda" olduğunu söyler, karşı tarafa GERÇEKTEN erişilebildiğini değil: depo
+// wifi'sine bağlı ama internet/Supabase'e ulaşamayan bir tablette fetch başarısız olur, kayıt
+// kuyruğa girer — ama arayüz hiç düşmediği için `offline`/`online` event çifti HİÇ tetiklenmez ve
+// kayıt asla yeniden denenmezdi. 30 saniyelik bu periyot o boşluğu kapatıyor. Yığılma riski yok:
+// trySync çevrimdışıyken hemen dönüyor, syncQueuedReceipts'in in-flight bayrağı eşzamanlı ikinci
+// bir turu no-op yapıyor ve kalıcı uygulama hataları offline-queue.js'teki üstel geri çekilmeye
+// takılıyor (yani aynı bozuk kayıt 30 saniyede bir sunucuya gitmiyor).
+const SYNC_INTERVAL_MS = 30_000;
+setInterval(trySync, SYNC_INTERVAL_MS);
 
 async function renderApp() {
   try {
