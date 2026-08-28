@@ -100,10 +100,10 @@ export async function renderMalKabulCiktisi(container) {
     .join('');
 
   container.innerHTML = `
-    <div class="no-print" style="margin-bottom:1rem;display:flex;gap:0.5rem;">
-      <button id="print-btn">Yazdır</button>
+    <div class="no-print" style="margin-bottom:1rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+      <button id="print-btn" class="btn-ghost">Yazdır</button>
       <button id="pdf-btn">PDF İndir</button>
-      <button id="excel-btn">Excel İndir</button>
+      <button id="excel-btn" class="btn-accent">Excel İndir</button>
     </div>
     <p id="ciktisi-msg" class="no-print"></p>
     <div id="print-area">${pagesHtml}</div>

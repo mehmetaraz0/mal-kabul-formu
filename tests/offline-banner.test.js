@@ -107,7 +107,7 @@ describe('offline-banner', () => {
     expect(el.textContent).toContain('Bir kayıt gönderilemiyor');
     expect(el.textContent).toContain('4 deneme');
     expect(el.textContent).toContain('foreign key');
-    expect(el.style.background).toContain('rgb(176, 0, 32)'); // #b00020
+    expect(el.style.background).toContain('var(--color-danger-text)');
   });
 
   it('birden fazla hatali kayitta kalici (application) hatayi onceliklendirir', async () => {

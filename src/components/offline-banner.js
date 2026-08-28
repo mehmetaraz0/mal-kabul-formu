@@ -59,7 +59,7 @@ async function updateBanner() {
 
   const stuck = failing?.lastErrorKind === 'application';
   currentBannerEl.style.display = 'block';
-  currentBannerEl.style.background = offline || stuck ? '#b00020' : '#a15c00';
+  currentBannerEl.style.background = offline || stuck ? 'var(--color-danger-text)' : 'var(--color-warning-text)';
 
   let text;
   if (offline) {
@@ -86,7 +86,7 @@ async function updateBanner() {
 export function renderOfflineBanner(container) {
   const el = document.createElement('div');
   el.id = 'offline-banner';
-  el.style.cssText = 'display:none;color:white;text-align:center;padding:0.4rem;font-size:0.9rem;';
+  el.style.cssText = 'display:none;color:white;text-align:center;padding:0.5rem;font-size:0.9rem;border-radius:0;';
   container.prepend(el);
 
   currentBannerEl = el;
