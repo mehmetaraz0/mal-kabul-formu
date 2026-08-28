@@ -20,8 +20,10 @@ export default defineConfig({
         ]
       },
       workbox: {
-        // Plan 5'te app-shell ve master data caching kuralları eklenecek
-        globPatterns: ['**/*.{js,css,html}']
+        // Plan 5'te app-shell ve master data caching kuralları eklenecek.
+        // xlsx: mal kabul formu şablonu (public/sablonlar/mal-kabul-formu-sablonu.xlsx) —
+        // önbelleğe alınmazsa offline'da Excel çıktısı "Şablon indirilemedi" hatası verir.
+        globPatterns: ['**/*.{js,css,html,xlsx}']
       }
     })
   ],
