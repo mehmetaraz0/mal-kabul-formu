@@ -4,6 +4,8 @@ import { renderSearchList } from '../components/search-list.js';
 import { createReceiptWithItems } from '../lib/receipts.js';
 import { getCurrentProfile, hasRole } from '../lib/auth.js';
 import { escapeHtml } from '../lib/html.js';
+import { isNetworkError } from '../lib/offline-cache.js';
+import { enqueueReceipt } from '../lib/offline-queue.js';
 
 export async function renderYeniKabul(container) {
   const profile = await getCurrentProfile();
@@ -133,20 +135,36 @@ export async function renderYeniKabul(container) {
       // içinde kalite onayına gönderir (öksüz taslak kalmaz).
       const aracHijyenValue = container.querySelector('#kabul-arac-hijyen').value;
       const aracSicaklikValue = container.querySelector('#kabul-arac-sicaklik').value;
-      await createReceiptWithItems({
+      // clientUuid burada üretiliyor (RPC'nin kendi varsayılanına bırakmak yerine) çünkü ağ
+      // hatası durumunda enqueueReceipt'e AYNI uuid'yi vermemiz gerekiyor — aksi halde kuyruktaki
+      // kayıt senkronize olduğunda sunucu tarafında farklı bir client_uuid ile ikinci bir kayıt
+      // oluşur (idempotency anahtarı eşleşmez).
+      const clientUuid = crypto.randomUUID();
+      const payload = {
         companyId: state.companyId,
         receiptDate: container.querySelector('#kabul-tarih').value,
         irsaliyeNo: container.querySelector('#kabul-irsaliye').value,
         siparisNo: container.querySelector('#kabul-siparis').value,
         receivedBy: profile.id,
         items: state.items,
-        submitToQuality: sendToQuality,
         faturaNo: container.querySelector('#kabul-fatura').value,
         aracHijyenUygun: aracHijyenValue === '' ? null : aracHijyenValue === 'true',
         aracSicaklik: aracSicaklikValue ? Number(aracSicaklikValue) : null
-      });
-      msg.style.color = 'green';
-      msg.textContent = sendToQuality ? 'Kaydedildi ve kalite onayına gönderildi.' : 'Taslak olarak kaydedildi.';
+      };
+      try {
+        await createReceiptWithItems({ ...payload, clientUuid, submitToQuality: sendToQuality });
+        msg.style.color = 'green';
+        msg.textContent = sendToQuality ? 'Kaydedildi ve kalite onayına gönderildi.' : 'Taslak olarak kaydedildi.';
+      } catch (err) {
+        // Sadece GERÇEK ağ hataları kuyruğa alınır (bkz. offline-cache.js/isNetworkError).
+        // RLS reddi, validasyon hatası gibi uygulama seviyesi hatalar burada yeniden fırlatılıp
+        // dıştaki catch'e düşer — aksi halde asla senkronize olamayacak bozuk bir kayıt kuyrukta
+        // sonsuza kadar bekler (Global Constraint, plan dokümanı).
+        if (!isNetworkError(err)) throw err;
+        await enqueueReceipt({ clientUuid, payload, sendToQuality });
+        msg.style.color = '#a15c00';
+        msg.textContent = 'Çevrimdışısınız — kayıt cihazda bekletildi, bağlantı gelince otomatik gönderilecek.';
+      }
       state.items = [];
       state.companyId = null;
       container.querySelector('#firma-selected').textContent = '';

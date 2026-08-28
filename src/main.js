@@ -10,11 +10,34 @@ import { renderMalKabulCiktisi } from './pages/mal-kabul-ciktisi.js';
 import { escapeHtml } from './lib/html.js';
 import { registerRoute, startRouter, navigate } from './router.js';
 import { renderOfflineBanner } from './components/offline-banner.js';
+import { syncQueuedReceipts } from './lib/offline-queue.js';
 import { registerSW } from 'virtual:pwa-register';
 
 registerSW({ immediate: true });
 
 const app = document.querySelector('#app');
+
+// Çevrimdışı kuyruktaki (idb-keyval) bekleyen mal kabul kayıtlarını göndermeyi dener.
+// syncQueuedReceipts kendi içinde her kayıt için ayrı ayrı try/catch yapar ve asla reject
+// olmaz (bkz. offline-queue.js) — yine de idb-keyval'in kendisi (ör. IndexedDB devre dışıysa)
+// hata fırlatabileceğinden burada da savunmacı bir catch var; bu senkron denemesi hiçbir zaman
+// sayfa render'ını veya login akışını bozmamalı.
+async function trySync() {
+  if (!navigator.onLine) return;
+  try {
+    const { synced, failed } = await syncQueuedReceipts();
+    if (synced > 0) console.info(`${synced} bekleyen mal kabul kaydı senkronize edildi.`);
+    if (failed > 0) console.warn(`${failed} kayıt senkronize edilemedi, tekrar denenecek.`);
+  } catch (err) {
+    console.warn('Kuyruk senkronizasyonu sırasında beklenmeyen hata:', err.message);
+  }
+}
+
+// 'online' event'i giriş yapılmamışken de tetiklenebilir (ör. login ekranındayken bağlantı
+// geri gelirse) — bu durumda syncQueuedReceipts'in RPC çağrısı auth olmadığı için başarısız
+// olur, kayıt kuyrukta kalır ve bir sonraki denemede (login sonrası renderApp veya bir sonraki
+// online event'i) tekrar denenir. Zararsız, sadece gecikmeli bir retry.
+window.addEventListener('online', trySync);
 
 async function renderApp() {
   try {
@@ -40,6 +63,9 @@ async function renderApp() {
       <main id="page-content" style="padding:1rem;"></main>
     `;
     renderOfflineBanner(app);
+    // Uygulama açılışında (ve her başarılı auth state değişiminde, ör. login sonrası) kuyrukta
+    // bekleyen kayıt var mı diye bir kez dene — render'ı bloklamasın diye await edilmiyor.
+    trySync();
     app.querySelector('#logout-btn').addEventListener('click', async () => {
       await signOut();
       renderApp();
