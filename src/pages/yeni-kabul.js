@@ -24,16 +24,16 @@ export async function renderYeniKabul(container) {
       <div class="card-header"><div class="card-header-title">📋 Teslimat Bilgileri</div></div>
       <div class="field-grid">
         <div class="field">
-          <span class="field-label">Firma *</span>
+          <label class="field-label">Firma *</label>
           <div id="firma-picker"></div>
           <div id="firma-selected" style="font-weight:bold;margin-top:0.3rem;"></div>
         </div>
-        <div class="field"><span class="field-label">Tarih *</span><input type="date" id="kabul-tarih" value="${new Date().toISOString().slice(0, 10)}" /></div>
-        <div class="field"><span class="field-label">İrsaliye No</span><input type="text" id="kabul-irsaliye" /></div>
-        <div class="field"><span class="field-label">Sipariş No</span><input type="text" id="kabul-siparis" /></div>
-        <div class="field"><span class="field-label">Fatura No</span><input type="text" id="kabul-fatura" placeholder="Fatura No" /></div>
+        <div class="field"><label class="field-label" for="kabul-tarih">Tarih *</label><input type="date" id="kabul-tarih" value="${new Date().toISOString().slice(0, 10)}" /></div>
+        <div class="field"><label class="field-label" for="kabul-irsaliye">İrsaliye No</label><input type="text" id="kabul-irsaliye" /></div>
+        <div class="field"><label class="field-label" for="kabul-siparis">Sipariş No</label><input type="text" id="kabul-siparis" /></div>
+        <div class="field"><label class="field-label" for="kabul-fatura">Fatura No</label><input type="text" id="kabul-fatura" placeholder="Fatura No" /></div>
         <div class="field">
-          <span class="field-label">Araç Hijyeni</span>
+          <label class="field-label" for="kabul-arac-hijyen">Araç Hijyeni</label>
           <div class="status-box" id="arac-hijyen-box">
             <select id="kabul-arac-hijyen">
               <option value="">Araç Hijyeni —</option>
@@ -42,7 +42,7 @@ export async function renderYeniKabul(container) {
             </select>
           </div>
         </div>
-        <div class="field"><span class="field-label">Araç Sıcaklığı (°C)</span><input type="number" step="0.1" id="kabul-arac-sicaklik" placeholder="Örn: 4" /></div>
+        <div class="field"><label class="field-label" for="kabul-arac-sicaklik">Araç Sıcaklığı (°C)</label><input type="number" step="0.1" id="kabul-arac-sicaklik" placeholder="Örn: 4" /></div>
       </div>
     </div>
 
@@ -211,7 +211,7 @@ export async function renderYeniKabul(container) {
       };
       try {
         await createReceiptWithItems({ ...payload, clientUuid, submitToQuality: sendToQuality });
-        msg.style.color = 'green';
+        msg.style.color = 'var(--color-success-text)';
         msg.textContent = sendToQuality ? 'Kaydedildi ve kalite onayına gönderildi.' : 'Taslak olarak kaydedildi.';
       } catch (err) {
         // Sadece GERÇEK ağ hataları kuyruğa alınır (bkz. offline-cache.js/isNetworkError).

@@ -25,19 +25,19 @@ export async function renderArama(container) {
   container.innerHTML = `
     <div class="card">
       <div class="card-header"><div class="card-header-title">🔍 Mal Kabul Kayıtlarında Ara</div></div>
-      <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:end;">
-        <div class="field" style="min-width:180px;flex:1;">
-          <span class="field-label">Firma</span>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:end;">
+        <div class="field" style="min-width:150px;flex:1;">
+          <label class="field-label" for="filter-company">Firma</label>
           <select id="filter-company"><option value="">Tümü</option>${companies.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('')}</select>
         </div>
-        <div class="field" style="min-width:180px;flex:1;">
-          <span class="field-label">Ürün</span>
+        <div class="field" style="min-width:150px;flex:1;">
+          <label class="field-label" for="filter-product">Ürün</label>
           <select id="filter-product"><option value="">Tümü</option>${products.map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.code)} — ${escapeHtml(p.name)}</option>`).join('')}</select>
         </div>
-        <div class="field"><span class="field-label">Başlangıç</span><input type="date" id="filter-start" /></div>
-        <div class="field"><span class="field-label">Bitiş</span><input type="date" id="filter-end" /></div>
+        <div class="field"><label class="field-label" for="filter-start">Başlangıç</label><input type="date" id="filter-start" /></div>
+        <div class="field"><label class="field-label" for="filter-end">Bitiş</label><input type="date" id="filter-end" /></div>
         <div class="field">
-          <span class="field-label">Durum</span>
+          <label class="field-label" for="filter-status">Durum</label>
           <select id="filter-status">
             <option value="">Tümü</option>
             <option value="taslak">Taslak</option>
@@ -46,8 +46,12 @@ export async function renderArama(container) {
             <option value="reddedildi">Reddedildi</option>
           </select>
         </div>
-        <button id="search-btn">Ara</button>
-        <button id="export-csv-btn" class="btn-ghost">CSV İndir</button>
+        <div class="field" style="justify-content:end;">
+          <button id="search-btn">Ara</button>
+        </div>
+        <div class="field" style="justify-content:end;">
+          <button id="export-csv-btn" class="btn-ghost">CSV İndir</button>
+        </div>
       </div>
     </div>
     <p id="arama-msg"></p>

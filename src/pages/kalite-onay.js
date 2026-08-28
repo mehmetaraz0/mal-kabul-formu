@@ -91,7 +91,7 @@ export async function renderKaliteOnay(container) {
             </tbody>
           </table>
         </div>
-        <div class="field" style="margin-top:1rem;"><span class="field-label">Genel Kalite Notu</span><input type="text" id="quality-note" /></div>
+        <div class="field" style="margin-top:1rem;"><label class="field-label" for="quality-note">Genel Kalite Notu</label><input type="text" id="quality-note" /></div>
         <div style="margin-top:0.5rem;display:flex;gap:0.5rem;">
           <button id="approve-btn" class="btn-success">Onayla</button>
           <button id="reject-btn" class="btn-danger">Reddet</button>
@@ -116,7 +116,7 @@ export async function renderKaliteOnay(container) {
       try {
         await updateItemUygunluk(itemId, uygunluk, note);
         lastGood.set(itemId, { uygunluk, note });
-        msg.style.color = 'green';
+        msg.style.color = 'var(--color-success-text)';
         msg.textContent = 'Kaydedildi.';
       } catch (err) {
         const prev = lastGood.get(itemId) || { uygunluk: 'beklemede', note: '' };
@@ -150,7 +150,7 @@ export async function renderKaliteOnay(container) {
           qualityBy: profile.id,
           qualityNote: panel.querySelector('#quality-note').value
         });
-        msg.style.color = 'green';
+        msg.style.color = 'var(--color-success-text)';
         msg.textContent = decision === 'onaylandi' ? 'Kayıt onaylandı.' : 'Kayıt reddedildi.';
       } catch (err) {
         msg.style.color = '#b00020';

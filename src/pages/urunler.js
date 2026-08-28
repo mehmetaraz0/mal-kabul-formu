@@ -29,15 +29,15 @@ export async function renderUrunler(container) {
   const addBox = container.querySelector('#urun-add');
   addBox.innerHTML = `
     <form id="urun-add-form" class="field-grid" style="align-items:end;">
-      <div class="field"><span class="field-label">Ürün Kodu</span><input type="text" id="new-urun-code" placeholder="örn. YIY01000999" required /></div>
-      <div class="field"><span class="field-label">Ürün Adı</span><input type="text" id="new-urun-name" required /></div>
-      <div class="field"><span class="field-label">Birim</span>
+      <div class="field"><label class="field-label" for="new-urun-code">Ürün Kodu</label><input type="text" id="new-urun-code" placeholder="örn. YIY01000999" required /></div>
+      <div class="field"><label class="field-label" for="new-urun-name">Ürün Adı</label><input type="text" id="new-urun-name" placeholder="Ürün adı" required /></div>
+      <div class="field"><label class="field-label" for="new-urun-unit">Birim</label>
         <select id="new-urun-unit">
           <option value="kg">kg</option>
           <option value="ad">ad</option>
         </select>
       </div>
-      <div class="field"><span class="field-label">Kategori</span>
+      <div class="field"><label class="field-label" for="new-urun-category">Kategori</label>
         <select id="new-urun-category">
           <option value="ET">ET</option>
           <option value="BALIK">BALIK</option>

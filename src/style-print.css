@@ -12,6 +12,14 @@
 #print-area table { width: 100%; border-collapse: collapse; }
 #print-area th, #print-area td { border: 1px solid #333; padding: 2px 3px; font-size: 8px; text-align: center; }
 #print-area th { font-size: 8px; }
+
+/* Redesim (Aug 2026) #app'in max-width'ini 960px'ten 1080px'e çıkardı; bu, #print-area'nın
+   (ve dolayısıyla html2pdf'in canvas'a yakaladığı genişliğin) sayfa temasına göre kaymasına
+   sebep oluyordu -- PDF çıktısı gerçek kağıt forma göre artık ~%11 farklı ölçekleniyordu.
+   Bu satır #print-area'yı, redesign ÖNCESİNDEKİ tam piksel genişliğine (960px eski #app
+   max-width - 2×16px eski #page-content padding = 928px) sabitliyor, #app/#page-content'in
+   ekran düzeni için ne olduğundan bağımsız olarak. */
+#print-area { width: 928px; }
 .print-page {
   page-break-after: always;
 }
