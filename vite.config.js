@@ -20,10 +20,27 @@ export default defineConfig({
         ]
       },
       workbox: {
-        // Plan 5'te app-shell ve master data caching kuralları eklenecek.
         // xlsx: mal kabul formu şablonu (public/sablonlar/mal-kabul-formu-sablonu.xlsx) —
         // önbelleğe alınmazsa offline'da Excel çıktısı "Şablon indirilemedi" hatası verir.
-        globPatterns: ['**/*.{js,css,html,xlsx}']
+        globPatterns: ['**/*.{js,css,html,xlsx}'],
+        // Supabase REST API farklı bir origin'de yaşar (https://<proje-ref>.supabase.co),
+        // uygulamanın kendi origin'inden ayrı. Workbox'ın generateSW router'ı `fetch` event'ini
+        // TÜM isteklerde (same-origin ve cross-origin dahil) yakalar ve her runtimeCaching girdisi
+        // için urlPattern fonksiyonunu, isteğin tam URL'iyle (origin farketmeksizin) çağırır —
+        // bu yüzden yalnızca `url.pathname` kontrolü, origin'i ayrıca kısıtlamadan
+        // Supabase isteklerini de doğru şekilde eşler.
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) =>
+              url.pathname.startsWith('/rest/v1/companies') || url.pathname.startsWith('/rest/v1/products'),
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'supabase-master-data',
+              networkTimeoutSeconds: 3,
+              expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 7 }
+            }
+          }
+        ]
       }
     })
   ],

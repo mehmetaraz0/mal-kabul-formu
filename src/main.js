@@ -9,6 +9,10 @@ import { renderArama } from './pages/arama.js';
 import { renderMalKabulCiktisi } from './pages/mal-kabul-ciktisi.js';
 import { escapeHtml } from './lib/html.js';
 import { registerRoute, startRouter, navigate } from './router.js';
+import { renderOfflineBanner } from './components/offline-banner.js';
+import { registerSW } from 'virtual:pwa-register';
+
+registerSW({ immediate: true });
 
 const app = document.querySelector('#app');
 
@@ -17,6 +21,7 @@ async function renderApp() {
     const profile = await getCurrentProfile();
     if (!profile) {
       renderLogin(app, renderApp);
+      renderOfflineBanner(app);
       return;
     }
     app.innerHTML = `
@@ -34,6 +39,7 @@ async function renderApp() {
       </nav>
       <main id="page-content" style="padding:1rem;"></main>
     `;
+    renderOfflineBanner(app);
     app.querySelector('#logout-btn').addEventListener('click', async () => {
       await signOut();
       renderApp();
@@ -61,6 +67,9 @@ async function renderApp() {
     startRouter(pageContent);
   } catch (err) {
     app.innerHTML = `<p style="color:#b00020;padding:1rem;">Bir hata oluştu: ${escapeHtml(err.message)}</p>`;
+    // renderApp() en çok tam da çevrimdışıyken hata verebilir (ör. profil sorgusu ağ
+    // hatasıyla patlarsa) — bu yüzden hata ekranında da banner'ın kaybolmaması önemli.
+    renderOfflineBanner(app);
   }
 }
 
