@@ -15,6 +15,18 @@ import { registerSW } from 'virtual:pwa-register';
 
 const app = document.querySelector('#app');
 
+// Aktif nav pill'ini `location.hash`e göre işaretler. Modül seviyesinde TEK bir fonksiyon
+// referansı olduğu için `window.addEventListener('hashchange', updateActiveNav)` her
+// renderApp() çağrısında tekrar eklense bile tarayıcı aynı referansı dedup eder (router.js'in
+// kendi hashchange dinleyicisiyle aynı, kanıtlanmış desen) — biriken dinleyici riski yok.
+function updateActiveNav() {
+  const current = window.location.hash.slice(1) || '/';
+  app.querySelectorAll('[data-nav]').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.nav === current);
+  });
+}
+window.addEventListener('hashchange', updateActiveNav);
+
 // Yeni bir sürüm yayına alındığında kullanıcıya gösterilen güncelleme çubuğu.
 // `#app` yerine doğrudan `document.body`'ye ekleniyor: renderApp() her çalıştığında
 // `app.innerHTML`'i tamamen değiştiriyor ve içine eklenmiş her şeyi koparıyor (offline-banner'ın
@@ -108,19 +120,22 @@ async function renderApp() {
       return;
     }
     app.innerHTML = `
-      <header style="display:flex;justify-content:space-between;padding:1rem;background:#1e3a5f;color:white;">
-        <span>${escapeHtml(profile.full_name)} (${escapeHtml(profile.role)})</span>
-        <button id="logout-btn">Çıkış</button>
+      <header class="app-topbar">
+        <span class="app-topbar-title">Mal Kabul Formu</span>
+        <span>
+          <span class="app-topbar-user">${escapeHtml(profile.full_name)} (${escapeHtml(profile.role)})</span>
+          <button id="logout-btn" class="btn-ghost">Çıkış</button>
+        </span>
       </header>
-      <nav style="display:flex;gap:0.5rem;padding:0.5rem 1rem;background:#e9ecef;flex-wrap:wrap;">
-        <button data-nav="/">Ana Sayfa</button>
-        <button data-nav="/firmalar">Firmalar</button>
-        <button data-nav="/urunler">Ürünler</button>
-        ${profile.role === 'depo_yonetici' ? '<button data-nav="/yeni-kabul">Yeni Mal Kabul</button>' : ''}
-        ${profile.role === 'kalite_ekibi' ? '<button data-nav="/kalite-onay">Kalite Onayı</button>' : ''}
-        <button data-nav="/arama">Kayıt Ara</button>
+      <nav class="app-subnav">
+        <button class="pill-tab" data-nav="/">Ana Sayfa</button>
+        <button class="pill-tab" data-nav="/firmalar">Firmalar</button>
+        <button class="pill-tab" data-nav="/urunler">Ürünler</button>
+        ${profile.role === 'depo_yonetici' ? '<button class="pill-tab" data-nav="/yeni-kabul">Yeni Mal Kabul</button>' : ''}
+        ${profile.role === 'kalite_ekibi' ? '<button class="pill-tab" data-nav="/kalite-onay">Kalite Onayı</button>' : ''}
+        <button class="pill-tab" data-nav="/arama">Kayıt Ara</button>
       </nav>
-      <main id="page-content" style="padding:1rem;"></main>
+      <main id="page-content" style="padding:1.25rem;"></main>
     `;
     renderOfflineBanner(app);
     // Uygulama açılışında (ve her başarılı auth state değişiminde, ör. login sonrası) kuyrukta
@@ -141,7 +156,7 @@ async function renderApp() {
         c.innerHTML = '';
         return;
       }
-      c.innerHTML = '<p><button data-nav="/yeni-kabul">+ Yeni Mal Kabul</button></p>';
+      c.innerHTML = '<p><button class="btn-accent" data-nav="/yeni-kabul">+ Yeni Mal Kabul</button></p>';
       c.querySelector('[data-nav]').addEventListener('click', () => navigate('/yeni-kabul'));
     });
     registerRoute('/firmalar', renderFirmalar);
@@ -151,6 +166,7 @@ async function renderApp() {
     registerRoute('/arama', renderArama);
     registerRoute('/mal-kabul-ciktisi', renderMalKabulCiktisi);
     startRouter(pageContent);
+    updateActiveNav();
   } catch (err) {
     app.innerHTML = `<p style="color:#b00020;padding:1rem;">Bir hata oluştu: ${escapeHtml(err.message)}</p>`;
     // renderApp() en çok tam da çevrimdışıyken hata verebilir (ör. profil sorgusu ağ
