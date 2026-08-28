@@ -12,37 +12,53 @@ const STATUS_LABELS = {
   reddedildi: 'Reddedildi'
 };
 
+const STATUS_BADGE_VARIANT = {
+  taslak: 'neutral',
+  kalite_bekliyor: 'warning',
+  onaylandi: 'success',
+  reddedildi: 'danger'
+};
+
 export async function renderArama(container) {
   const [companies, products] = await Promise.all([listCompanies(), listProducts()]);
 
   container.innerHTML = `
-    <h2>Mal Kabul Kayıtlarında Ara</h2>
-    <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:end;margin-bottom:1rem;">
-      <label>Firma
-        <select id="filter-company"><option value="">Tümü</option>${companies.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('')}</select>
-      </label>
-      <label>Ürün
-        <select id="filter-product"><option value="">Tümü</option>${products.map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.code)} — ${escapeHtml(p.name)}</option>`).join('')}</select>
-      </label>
-      <label>Başlangıç <input type="date" id="filter-start" /></label>
-      <label>Bitiş <input type="date" id="filter-end" /></label>
-      <label>Durum
-        <select id="filter-status">
-          <option value="">Tümü</option>
-          <option value="taslak">Taslak</option>
-          <option value="kalite_bekliyor">Kalite Bekliyor</option>
-          <option value="onaylandi">Onaylandı</option>
-          <option value="reddedildi">Reddedildi</option>
-        </select>
-      </label>
-      <button id="search-btn">Ara</button>
-      <button id="export-csv-btn">CSV İndir</button>
+    <div class="card">
+      <div class="card-header"><div class="card-header-title">🔍 Mal Kabul Kayıtlarında Ara</div></div>
+      <div style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:end;">
+        <div class="field" style="min-width:180px;flex:1;">
+          <span class="field-label">Firma</span>
+          <select id="filter-company"><option value="">Tümü</option>${companies.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('')}</select>
+        </div>
+        <div class="field" style="min-width:180px;flex:1;">
+          <span class="field-label">Ürün</span>
+          <select id="filter-product"><option value="">Tümü</option>${products.map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.code)} — ${escapeHtml(p.name)}</option>`).join('')}</select>
+        </div>
+        <div class="field"><span class="field-label">Başlangıç</span><input type="date" id="filter-start" /></div>
+        <div class="field"><span class="field-label">Bitiş</span><input type="date" id="filter-end" /></div>
+        <div class="field">
+          <span class="field-label">Durum</span>
+          <select id="filter-status">
+            <option value="">Tümü</option>
+            <option value="taslak">Taslak</option>
+            <option value="kalite_bekliyor">Kalite Bekliyor</option>
+            <option value="onaylandi">Onaylandı</option>
+            <option value="reddedildi">Reddedildi</option>
+          </select>
+        </div>
+        <button id="search-btn">Ara</button>
+        <button id="export-csv-btn" class="btn-ghost">CSV İndir</button>
+      </div>
     </div>
     <p id="arama-msg"></p>
-    <table style="width:100%;border-collapse:collapse;">
-      <thead><tr style="text-align:left;border-bottom:2px solid #333;"><th>Tarih</th><th>Firma</th><th>İrsaliye No</th><th>Durum</th><th></th></tr></thead>
-      <tbody id="results-body"></tbody>
-    </table>
+    <div class="card">
+      <div style="overflow-x:auto;">
+        <table class="card-table">
+          <thead><tr><th>Tarih</th><th>Firma</th><th>İrsaliye No</th><th>Durum</th><th></th></tr></thead>
+          <tbody id="results-body"></tbody>
+        </table>
+      </div>
+    </div>
   `;
 
   let lastResults = [];
@@ -73,7 +89,7 @@ export async function renderArama(container) {
             <td>${escapeHtml(r.receipt_date)}</td>
             <td>${escapeHtml(r.companies.name)}</td>
             <td>${escapeHtml(r.irsaliye_no || '-')}</td>
-            <td>${escapeHtml(STATUS_LABELS[r.status] || r.status)}</td>
+            <td><span class="badge badge-${STATUS_BADGE_VARIANT[r.status] || 'neutral'}">${escapeHtml(STATUS_LABELS[r.status] || r.status)}</span></td>
             <td><button data-view="${escapeHtml(r.id)}">Çıktı</button></td>
           </tr>`
         )
