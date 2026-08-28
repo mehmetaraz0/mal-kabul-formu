@@ -89,6 +89,16 @@ describe('buildMalKabulWorkbook', () => {
     expect(ws.getCell('N5').value).toBe('SKT geçmiş');
   });
 
+  it('uygun (ve beklemede) satırında da not girilmişse Açıklama sütunu koşulsuz gösterir (PDF çıktısıyla aynı davranış)', async () => {
+    const ogeUygun = ornekOge({ uygunluk: 'uygun', note: 'Kutu hafif ezik, ürün etkilenmemiş' });
+    const wbUygun = await buildMalKabulWorkbook(ornekReceipt(), [ogeUygun], await sablon());
+    expect(wbUygun.worksheets[0].getCell('N5').value).toBe('Kutu hafif ezik, ürün etkilenmemiş');
+
+    const ogeBeklemede = ornekOge({ uygunluk: 'beklemede', note: 'Kalite ekibi inceliyor' });
+    const wbBeklemede = await buildMalKabulWorkbook(ornekReceipt(), [ogeBeklemede], await sablon());
+    expect(wbBeklemede.worksheets[0].getCell('N5').value).toBe('Kalite ekibi inceliyor');
+  });
+
   it('birim ad ise Adet sütununa, kg ise Kg sütununa yazar', async () => {
     const oge = ornekOge({ quantity: 3, unit: 'ad' });
     const wb = await buildMalKabulWorkbook(ornekReceipt(), [oge], await sablon());

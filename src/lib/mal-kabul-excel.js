@@ -65,7 +65,9 @@ export async function buildMalKabulWorkbook(receipt, items, templateArrayBuffer)
       sheet.getCell(`K${row}`).value = item.unit === 'kg' ? item.quantity : '';
       sheet.getCell(`L${row}`).value = item.unit === 'ad' ? item.quantity : '';
       sheet.getCell(`M${row}`).value = mkkSembolu(item.uygunluk);
-      sheet.getCell(`N${row}`).value = item.uygunluk === 'uygun_degil' ? item.note || '-' : '-';
+      // Not sütunu koşulsuz gösterilir — PDF/print çıktısıyla aynı (kalite ekibi
+      // uygun/beklemede satırına da not girebiliyor, kalite-onay.js'te bir kısıt yok).
+      sheet.getCell(`N${row}`).value = item.note || '-';
       // O{row}:P{row} (İmzalar) bilerek boş bırakılıyor — ıslak imza için.
     });
 
