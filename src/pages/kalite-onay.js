@@ -11,9 +11,11 @@ export async function renderKaliteOnay(container) {
 
   const pending = await listPendingQuality();
   container.innerHTML = `
-    <h2>Kalite Onayı Bekleyen Kayıtlar</h2>
-    <p id="list-msg" style="color:#b00020;"></p>
-    <ul id="pending-list" style="list-style:none;padding:0;"></ul>
+    <div class="card">
+      <div class="card-header"><div class="card-header-title">✅ Kalite Onayı Bekleyen Kayıtlar</div></div>
+      <p id="list-msg" style="color:var(--color-danger-text);"></p>
+      <ul id="pending-list" style="list-style:none;padding:0;margin:0;"></ul>
+    </div>
     <div id="detail-panel"></div>
   `;
 
@@ -22,12 +24,12 @@ export async function renderKaliteOnay(container) {
 
   function fillList(records) {
     if (records.length === 0) {
-      list.innerHTML = '<li>Bekleyen kayıt yok.</li>';
+      list.innerHTML = '<li style="color:var(--color-label);">Bekleyen kayıt yok.</li>';
       return;
     }
     list.innerHTML = records
-      .map((r) => `<li style="padding:0.5rem;border-bottom:1px solid #eee;">
-      <button data-open="${escapeHtml(r.id)}">${escapeHtml(r.receipt_date)} — ${escapeHtml(r.companies.name)} (İrsaliye: ${escapeHtml(r.irsaliye_no || '-')})</button>
+      .map((r) => `<li style="padding:0.6rem 0;border-bottom:1px solid var(--color-border);">
+      <button data-open="${escapeHtml(r.id)}" class="btn-ghost" style="width:100%;text-align:left;">${escapeHtml(r.receipt_date)} — ${escapeHtml(r.companies.name)} (İrsaliye: ${escapeHtml(r.irsaliye_no || '-')})</button>
     </li>`)
       .join('');
 
@@ -56,40 +58,46 @@ export async function renderKaliteOnay(container) {
     const { receipt, items } = await getReceiptDetail(receiptId);
     const panel = container.querySelector('#detail-panel');
     panel.innerHTML = `
-      <h3>Detay — İrsaliye: ${escapeHtml(receipt.irsaliye_no || '-')} / Sipariş: ${escapeHtml(receipt.siparis_no || '-')}</h3>
-      <p>Araç Hijyeni: ${receipt.arac_hijyen_uygun === null ? '-' : receipt.arac_hijyen_uygun ? 'Uygun' : 'Uygun Değil'} — Araç Sıcaklığı: ${escapeHtml(receipt.arac_sicaklik ?? '-')}°C</p>
-      <table style="width:100%;border-collapse:collapse;">
-        <thead><tr><th>Ürün</th><th>Lot No</th><th>SKT</th><th>Miktar</th><th>Ürün Sıcaklığı</th><th>Yarı Ömür Geçti mi</th><th>Uygunluk</th><th>Not</th></tr></thead>
-        <tbody>
-          ${items
-            .map(
-              (item) => `
-            <tr>
-              <td>${escapeHtml(item.products.code)} — ${escapeHtml(item.products.name)}</td>
-              <td>${escapeHtml(item.lot_no || '-')}</td>
-              <td>${escapeHtml(item.skt || '-')}</td>
-              <td>${escapeHtml(item.quantity)} ${escapeHtml(item.unit)}</td>
-              <td>${escapeHtml(item.urun_sicakligi ?? '-')}</td>
-              <td>${item.yari_omur_gecti ? 'Evet' : 'Hayır'}</td>
-              <td>
-                <select data-item="${escapeHtml(item.id)}" data-field="uygunluk">
-                  <option value="beklemede" ${item.uygunluk === 'beklemede' ? 'selected' : ''}>Beklemede</option>
-                  <option value="uygun" ${item.uygunluk === 'uygun' ? 'selected' : ''}>Uygun</option>
-                  <option value="uygun_degil" ${item.uygunluk === 'uygun_degil' ? 'selected' : ''}>Uygun Değil</option>
-                </select>
-              </td>
-              <td><input type="text" data-item="${escapeHtml(item.id)}" data-field="note" value="${escapeHtml(item.note || '')}" /></td>
-            </tr>`
-            )
-            .join('')}
-        </tbody>
-      </table>
-      <label>Genel Kalite Notu <input type="text" id="quality-note" /></label>
-      <div style="margin-top:0.5rem;display:flex;gap:0.5rem;">
-        <button id="approve-btn">Onayla</button>
-        <button id="reject-btn">Reddet</button>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-header-title">Detay — İrsaliye: ${escapeHtml(receipt.irsaliye_no || '-')} / Sipariş: ${escapeHtml(receipt.siparis_no || '-')}</div>
+        </div>
+        <p>Araç Hijyeni: ${receipt.arac_hijyen_uygun === null ? '-' : receipt.arac_hijyen_uygun ? 'Uygun' : 'Uygun Değil'} — Araç Sıcaklığı: ${escapeHtml(receipt.arac_sicaklik ?? '-')}°C</p>
+        <div style="overflow-x:auto;">
+          <table class="card-table">
+            <thead><tr><th>Ürün</th><th>Lot No</th><th>SKT</th><th>Miktar</th><th>Ürün Sıcaklığı</th><th>Yarı Ömür Geçti mi</th><th>Uygunluk</th><th>Not</th></tr></thead>
+            <tbody>
+              ${items
+                .map(
+                  (item) => `
+                <tr>
+                  <td>${escapeHtml(item.products.code)} — ${escapeHtml(item.products.name)}</td>
+                  <td>${escapeHtml(item.lot_no || '-')}</td>
+                  <td>${escapeHtml(item.skt || '-')}</td>
+                  <td>${escapeHtml(item.quantity)} ${escapeHtml(item.unit)}</td>
+                  <td>${escapeHtml(item.urun_sicakligi ?? '-')}</td>
+                  <td>${item.yari_omur_gecti ? 'Evet' : 'Hayır'}</td>
+                  <td>
+                    <select data-item="${escapeHtml(item.id)}" data-field="uygunluk">
+                      <option value="beklemede" ${item.uygunluk === 'beklemede' ? 'selected' : ''}>Beklemede</option>
+                      <option value="uygun" ${item.uygunluk === 'uygun' ? 'selected' : ''}>Uygun</option>
+                      <option value="uygun_degil" ${item.uygunluk === 'uygun_degil' ? 'selected' : ''}>Uygun Değil</option>
+                    </select>
+                  </td>
+                  <td><input type="text" data-item="${escapeHtml(item.id)}" data-field="note" value="${escapeHtml(item.note || '')}" /></td>
+                </tr>`
+                )
+                .join('')}
+            </tbody>
+          </table>
+        </div>
+        <div class="field" style="margin-top:1rem;"><span class="field-label">Genel Kalite Notu</span><input type="text" id="quality-note" /></div>
+        <div style="margin-top:0.5rem;display:flex;gap:0.5rem;">
+          <button id="approve-btn" class="btn-success">Onayla</button>
+          <button id="reject-btn" class="btn-danger">Reddet</button>
+        </div>
+        <p id="detail-msg"></p>
       </div>
-      <p id="detail-msg"></p>
     `;
 
     const msg = panel.querySelector('#detail-msg');
