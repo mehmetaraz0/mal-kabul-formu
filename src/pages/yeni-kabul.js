@@ -138,9 +138,31 @@ export async function renderYeniKabul(container) {
       msg.textContent = 'Hata: Lütfen bir firma seçin';
       return;
     }
+    // items.length===0: `state.items.some(...)` bir sonraki kontrolde boş dizide HER ZAMAN
+    // false döner, yani "en az bir satır var mı" hiç ayrıca kontrol edilmiyordu — RPC'nin kendi
+    // 'En az bir ürün satırı gerekli' hatası createReceiptWithItems çağrılmadan, tamamen YEREL
+    // olarak (src/lib/receipts.js:26) fırlatılıyordu. Bu, yukarıdaki try/catch'in İÇİNDEYDİ, bu
+    // yüzden çevrimdışıyken isNetworkError bunu "ağ hatası" sanıp kuyruğa yazıyordu — kayıt her
+    // retry'da AYNI yerel hatayla sunucuya hiç ulaşmadan başarısız oluyordu (final review'ın 2
+    // numaralı bulgusunun gözden kaçan üçüncü kontrolü).
+    if (state.items.length === 0) {
+      msg.style.color = '#b00020';
+      msg.textContent = 'Hata: En az bir ürün satırı gerekli';
+      return;
+    }
     if (state.items.some((item) => !(item.quantity > 0))) {
       msg.style.color = '#b00020';
       msg.textContent = "Hata: Tüm satırların miktarı 0'dan büyük olmalı";
+      return;
+    }
+    // Aynı aile: boş tarih de RPC'de sunucu tarafında date cast hatasıyla patlar (çevrimiçiyken
+    // bu network hatası SAYILMAZ, doğru şekilde kırmızı gösterilir) — ama çevrimdışıyken bu kez
+    // gerçek bir fetch denemesi (offline olduğu için) network hatası olarak sınıflandırılıp
+    // kuyruğa yazılır, ve sync sırasında sunucu her seferinde AYNI cast hatasıyla reddeder.
+    // Basit ve ucuz bir kontrol olduğu için burada da erkenden yakalıyoruz.
+    if (!container.querySelector('#kabul-tarih').value) {
+      msg.style.color = '#b00020';
+      msg.textContent = 'Hata: Tarih girilmeli';
       return;
     }
 
