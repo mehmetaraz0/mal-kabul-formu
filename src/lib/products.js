@@ -1,21 +1,24 @@
 import { supabase } from './supabase.js';
+import { cacheAside } from './offline-cache.js';
 
 const VALID_UNITS = ['kg', 'ad'];
 const VALID_CATEGORIES = ['ET', 'BALIK'];
 
 export async function listProducts() {
-  // NOTE: real supabase-js query builders are self-chainable thenables, so
-  // `.order('category').order('name')` works against the live backend.
-  // A minimal mock's `.order()` resolves directly to a Promise (no further
-  // `.order` method), so chaining two `.order()` calls breaks under test.
-  // We call `.order()` once server-side and finish the secondary sort
-  // (by name, Turkish-aware) client-side — same effective ordering, and
-  // compatible with both the real client and simple mocks.
-  const { data, error } = await supabase.from('products').select('id, code, name, unit, category').order('category');
-  if (error) throw error;
-  return [...data].sort((a, b) => {
-    if (a.category !== b.category) return a.category.localeCompare(b.category, 'tr');
-    return a.name.localeCompare(b.name, 'tr');
+  return cacheAside('cache:products', async () => {
+    // NOTE: real supabase-js query builders are self-chainable thenables, so
+    // `.order('category').order('name')` works against the live backend.
+    // A minimal mock's `.order()` resolves directly to a Promise (no further
+    // `.order` method), so chaining two `.order()` calls breaks under test.
+    // We call `.order()` once server-side and finish the secondary sort
+    // (by name, Turkish-aware) client-side — same effective ordering, and
+    // compatible with both the real client and simple mocks.
+    const { data, error } = await supabase.from('products').select('id, code, name, unit, category').order('category');
+    if (error) throw error;
+    return [...data].sort((a, b) => {
+      if (a.category !== b.category) return a.category.localeCompare(b.category, 'tr');
+      return a.name.localeCompare(b.name, 'tr');
+    });
   });
 }
 

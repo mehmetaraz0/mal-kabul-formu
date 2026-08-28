@@ -1,9 +1,12 @@
 import { supabase } from './supabase.js';
+import { cacheAside } from './offline-cache.js';
 
 export async function listCompanies() {
-  const { data, error } = await supabase.from('companies').select('id, name, sira_no').order('name');
-  if (error) throw error;
-  return data;
+  return cacheAside('cache:companies', async () => {
+    const { data, error } = await supabase.from('companies').select('id, name, sira_no').order('name');
+    if (error) throw error;
+    return data;
+  });
 }
 
 export async function addCompany(name) {
