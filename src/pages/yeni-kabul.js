@@ -20,40 +20,50 @@ export async function renderYeniKabul(container) {
   const state = { companyId: null, items: [] };
 
   container.innerHTML = `
-    <h2>Yeni Mal Kabul</h2>
-    <div style="display:flex;flex-direction:column;gap:0.75rem;max-width:520px;">
-      <label>Firma
-        <div id="firma-picker"></div>
-        <div id="firma-selected" style="font-weight:bold;"></div>
-      </label>
-      <label>Tarih <input type="date" id="kabul-tarih" value="${new Date().toISOString().slice(0, 10)}" /></label>
-      <label>İrsaliye No <input type="text" id="kabul-irsaliye" /></label>
-      <label>Sipariş No <input type="text" id="kabul-siparis" /></label>
-      <label>Fatura No <input type="text" id="kabul-fatura" placeholder="Fatura No" /></label>
-      <label>Araç Hijyeni
-        <select id="kabul-arac-hijyen">
-          <option value="">Araç Hijyeni —</option>
-          <option value="true">Uygun</option>
-          <option value="false">Uygun Değil</option>
-        </select>
-      </label>
-      <label>Araç Sıcaklığı (°C) <input type="number" step="0.1" id="kabul-arac-sicaklik" placeholder="Araç Sıcaklığı (°C)" /></label>
+    <div class="card">
+      <div class="card-header"><div class="card-header-title">📋 Teslimat Bilgileri</div></div>
+      <div class="field-grid">
+        <div class="field">
+          <span class="field-label">Firma *</span>
+          <div id="firma-picker"></div>
+          <div id="firma-selected" style="font-weight:bold;margin-top:0.3rem;"></div>
+        </div>
+        <div class="field"><span class="field-label">Tarih *</span><input type="date" id="kabul-tarih" value="${new Date().toISOString().slice(0, 10)}" /></div>
+        <div class="field"><span class="field-label">İrsaliye No</span><input type="text" id="kabul-irsaliye" /></div>
+        <div class="field"><span class="field-label">Sipariş No</span><input type="text" id="kabul-siparis" /></div>
+        <div class="field"><span class="field-label">Fatura No</span><input type="text" id="kabul-fatura" placeholder="Fatura No" /></div>
+        <div class="field">
+          <span class="field-label">Araç Hijyeni</span>
+          <div class="status-box" id="arac-hijyen-box">
+            <select id="kabul-arac-hijyen">
+              <option value="">Araç Hijyeni —</option>
+              <option value="true">Uygun</option>
+              <option value="false">Uygun Değil</option>
+            </select>
+          </div>
+        </div>
+        <div class="field"><span class="field-label">Araç Sıcaklığı (°C)</span><input type="number" step="0.1" id="kabul-arac-sicaklik" placeholder="Örn: 4" /></div>
+      </div>
     </div>
 
-    <h3>Ürün Ekle</h3>
-    <div id="urun-picker" style="max-width:520px;"></div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-header-title">📦 Ürünler</div>
+      </div>
+      <div id="urun-picker" style="margin-bottom:1rem;"></div>
 
-    <table id="items-table" style="width:100%;border-collapse:collapse;margin-top:1rem;">
-      <thead>
-        <tr style="text-align:left;border-bottom:2px solid #333;">
-          <th>Ürün</th><th>Lot No</th><th>SKT</th><th>Miktar</th><th>Birim</th><th>Ürün Sıcaklığı</th><th>Yarı Ömür Geçti mi</th><th></th>
-        </tr>
-      </thead>
-      <tbody id="items-body"></tbody>
-    </table>
+      <div style="overflow-x:auto;">
+        <table id="items-table" class="card-table">
+          <thead>
+            <tr><th>Ürün</th><th>Lot No</th><th>SKT</th><th>Miktar</th><th>Birim</th><th>Ürün Sıcaklığı</th><th>Yarı Ömür Geçti mi</th><th></th></tr>
+          </thead>
+          <tbody id="items-body"></tbody>
+        </table>
+      </div>
+    </div>
 
-    <div style="margin-top:1rem;display:flex;gap:0.5rem;">
-      <button id="save-draft-btn">Taslak Kaydet</button>
+    <div style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
+      <button id="save-draft-btn" class="btn-ghost">Taslak Kaydet</button>
       <button id="submit-quality-btn">Kaydet ve Kalite Onayına Gönder</button>
     </div>
     <p id="kabul-msg"></p>
@@ -68,6 +78,11 @@ export async function renderYeniKabul(container) {
       state.companyId = c.id;
       container.querySelector('#firma-selected').textContent = 'Seçili: ' + c.name;
     }
+  });
+
+  const aracHijyenBox = container.querySelector('#arac-hijyen-box');
+  container.querySelector('#kabul-arac-hijyen').addEventListener('change', (e) => {
+    aracHijyenBox.dataset.value = e.target.value;
   });
 
   function renderItemsBody() {
