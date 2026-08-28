@@ -1,7 +1,6 @@
 import { listReceipts } from '../lib/receipts.js';
 import { listCompanies } from '../lib/companies.js';
 import { listProducts } from '../lib/products.js';
-import { downloadCsv } from '../lib/csv.js';
 import { escapeHtml } from '../lib/html.js';
 import { navigate } from '../router.js';
 
@@ -50,7 +49,7 @@ export async function renderArama(container) {
           <button id="search-btn">Ara</button>
         </div>
         <div class="field" style="justify-content:end;">
-          <button id="export-csv-btn" class="btn-ghost">CSV İndir</button>
+          <button id="export-excel-btn" class="btn-ghost">Excel İndir</button>
         </div>
       </div>
     </div>
@@ -108,24 +107,40 @@ export async function renderArama(container) {
   }
 
   container.querySelector('#search-btn').addEventListener('click', runSearch);
-  container.querySelector('#export-csv-btn').addEventListener('click', () => {
+  container.querySelector('#export-excel-btn').addEventListener('click', async () => {
     const msg = container.querySelector('#arama-msg');
     msg.textContent = '';
     if (lastResults.length === 0) return;
     try {
-      downloadCsv(
-        `mal-kabul-${new Date().toISOString().slice(0, 10)}.csv`,
-        lastResults.map((r) => ({ tarih: r.receipt_date, firma: r.companies.name, irsaliye_no: r.irsaliye_no, durum: STATUS_LABELS[r.status] || r.status })),
-        [
-          { key: 'tarih', label: 'Tarih' },
-          { key: 'firma', label: 'Firma' },
-          { key: 'irsaliye_no', label: 'İrsaliye No' },
-          { key: 'durum', label: 'Durum' }
-        ]
-      );
+      // exceljs büyük bir bağımlılık — sadece butona basıldığında yüklensin (mal-kabul-ciktisi.js'teki
+      // Excel İndir butonuyla aynı desen).
+      const { buildReceiptsListWorkbook } = await import('../lib/receipts-list-excel.js');
+      const columns = [
+        { key: 'tarih', label: 'Tarih' },
+        { key: 'firma', label: 'Firma' },
+        { key: 'irsaliye_no', label: 'İrsaliye No' },
+        { key: 'durum', label: 'Durum' }
+      ];
+      const rows = lastResults.map((r) => ({
+        tarih: r.receipt_date,
+        firma: r.companies.name,
+        irsaliye_no: r.irsaliye_no,
+        durum: STATUS_LABELS[r.status] || r.status
+      }));
+      const workbook = await buildReceiptsListWorkbook(rows, columns);
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `mal-kabul-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
     } catch (err) {
       msg.style.color = '#b00020';
-      msg.textContent = 'Hata: ' + err.message;
+      msg.textContent = 'Excel oluşturulamadı: ' + err.message;
     }
   });
 
