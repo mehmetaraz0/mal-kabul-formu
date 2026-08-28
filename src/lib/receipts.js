@@ -140,10 +140,15 @@ export async function listReceipts({ companyId, startDate, endDate, status, prod
   if (status) query = query.eq('status', status);
 
   if (productId) {
+    // Çok satırlı bir ürün için bu ön-sorgu sınırsız olursa hem aşağıdaki .in() çağrısında
+    // PostgREST URL uzunluğu sorunu hem de (indekssiz) seq-scan riski oluşur — aşağıdaki
+    // ana sorguda zaten kullanılan .limit(500) üst sınırıyla aynı gerekçeyle burada da bir
+    // üst sınır konuyor (bkz. supabase/migrations/0010_receipt_items_product_index.sql).
     const { data: itemRows, error: itemsError } = await supabase
       .from('receipt_items')
       .select('receipt_id')
-      .eq('product_id', productId);
+      .eq('product_id', productId)
+      .limit(2000);
     if (itemsError) throw itemsError;
     const receiptIds = [...new Set(itemRows.map((r) => r.receipt_id))];
     // Eşleşen ürün satırı yoksa `.in('id', [])` PostgREST'e boş bir liste gönderir; bu davranış

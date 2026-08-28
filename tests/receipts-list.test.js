@@ -15,7 +15,8 @@ const receiptsQuery = {
 
 const itemsQuery = {
   select: vi.fn(function () { return this; }),
-  eq: vi.fn(() => Promise.resolve({ data: [{ receipt_id: 'r1' }], error: null }))
+  eq: vi.fn(function () { return this; }),
+  limit: vi.fn(() => Promise.resolve({ data: [{ receipt_id: 'r1' }], error: null }))
 };
 
 vi.mock('../src/lib/supabase.js', () => ({
@@ -52,8 +53,13 @@ describe('listReceipts', () => {
     expect(receiptsQuery.in).toHaveBeenCalledWith('id', ['r1']);
   });
 
+  it('ürün filtresi ön-sorgusu 2000 satırla sınırlanır (URL uzunluğu/seq-scan riskine karşı)', async () => {
+    await listReceipts({ productId: 5 });
+    expect(itemsQuery.limit).toHaveBeenCalledWith(2000);
+  });
+
   it('ürün filtresine eşleşen kayıt yoksa .in() hiç çağrılmadan boş dizi döner', async () => {
-    itemsQuery.eq.mockResolvedValueOnce({ data: [], error: null });
+    itemsQuery.limit.mockResolvedValueOnce({ data: [], error: null });
     const result = await listReceipts({ productId: 999 });
     expect(result).toEqual([]);
     // Regresyon koruması: erken dönüş korumasi kaldırılırsa kod .in('id', []) çağırmaya
