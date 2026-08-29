@@ -1,6 +1,5 @@
 import { listCompanies, addCompany } from '../lib/companies.js';
 import { renderSearchList } from '../components/search-list.js';
-import { getCurrentProfile, hasRole } from '../lib/auth.js';
 
 export async function renderFirmalar(container) {
   container.innerHTML = `
@@ -14,9 +13,6 @@ export async function renderFirmalar(container) {
       <p id="firma-msg"></p>
     </div>
   `;
-  const profile = await getCurrentProfile();
-  const isManager = hasRole(profile, 'depo_yonetici');
-
   const companies = await listCompanies();
   renderSearchList(container.querySelector('#firma-search'), {
     items: companies,
@@ -50,14 +46,4 @@ export async function renderFirmalar(container) {
       msg.textContent = err.code === '23505' ? 'Hata: Bu firma zaten kayıtlı.' : 'Hata: ' + err.message;
     }
   });
-
-  if (!isManager) {
-    // NOT: container'da artık iki `.card-header-title` var (Ara / Ekle kartları), o yüzden
-    // `container.querySelector('.card-header-title')` belirsiz olurdu (ilk eşleşeni, yanlış
-    // kartı hedefler). Notu container'ın en sonuna (her iki kartın da altına) ekliyoruz.
-    container.insertAdjacentHTML(
-      'beforeend',
-      '<p style="color:var(--color-label);font-size:0.85rem;">Not: Firma düzenleme/silme yetkisi sadece depo yöneticisindedir.</p>'
-    );
-  }
 }

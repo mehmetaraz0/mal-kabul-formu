@@ -1,6 +1,5 @@
 import { listProducts, addProduct } from '../lib/products.js';
 import { renderSearchList } from '../components/search-list.js';
-import { getCurrentProfile, hasRole } from '../lib/auth.js';
 
 export async function renderUrunler(container) {
   container.innerHTML = `
@@ -14,9 +13,6 @@ export async function renderUrunler(container) {
       <p id="urun-msg"></p>
     </div>
   `;
-  const profile = await getCurrentProfile();
-  const isManager = hasRole(profile, 'depo_yonetici');
-
   const products = await listProducts();
   renderSearchList(container.querySelector('#urun-search'), {
     items: products,
@@ -65,13 +61,4 @@ export async function renderUrunler(container) {
       msg.textContent = err.code === '23505' ? 'Hata: Bu ürün kodu zaten kayıtlı.' : 'Hata: ' + err.message;
     }
   });
-
-  if (!isManager) {
-    // NOT: container'da artık iki `.card-header-title` var (Ara / Ekle kartları) — bkz. firmalar.js
-    // Step 2'deki aynı düzeltme. Notu container'ın en sonuna ekliyoruz.
-    container.insertAdjacentHTML(
-      'beforeend',
-      '<p style="color:var(--color-label);font-size:0.85rem;">Not: Ürün düzenleme/silme yetkisi sadece depo yöneticisindedir.</p>'
-    );
-  }
 }

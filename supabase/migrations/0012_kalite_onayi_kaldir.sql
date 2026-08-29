@@ -27,9 +27,15 @@ create policy "receipts_insert_manager" on receipts for insert to authenticated
     and quality_note is null
   );
 
+-- receipts_update_manager_draft: sahibi SADECE kendi TASLAK kaydını 'onaylandi'ya
+-- taşıyabilir. USING'e `status = 'taslak'` şartı EKLENDİ (final review bulgusu) —
+-- bu olmadan sahibi kendi ONAYLANMIŞ kaydını status='taslak'a geri çekip (bu geçiş
+-- check_receipt_approval'ı tetiklemez, çünkü new.status <> 'onaylandi') satırlarını
+-- yeniden düzenleyip tekrar onaylayabiliyordu — onaylanmış bir kayıt artık DEĞİŞMEZ
+-- olmalı.
 drop policy if exists "receipts_update_manager_draft" on receipts;
 create policy "receipts_update_manager_draft" on receipts for update to authenticated
-  using (received_by = auth.uid())
+  using (received_by = auth.uid() and status = 'taslak')
   with check (
     received_by = auth.uid()
     and status in ('taslak', 'onaylandi')
@@ -167,3 +173,26 @@ begin
   return v_receipt_id;
 end;
 $$;
+
+-- Final review bulgusu 2: 0002'den kalan bu 5 politika hâlâ role='depo_yonetici'
+-- kontrolü yapıyordu — tek-rol modeline geçişte unutulmuşlardı. Artık herhangi bir
+-- authenticated kullanıcı firma/ürün düzenleyebilir/silebilir ve kendi taslak
+-- kaydındaki satırları silebilir (receipts/receipt_items ile aynı tutarlı model).
+drop policy if exists "companies_update_manager" on companies;
+create policy "companies_update_manager" on companies for update to authenticated using (true);
+drop policy if exists "companies_delete_manager" on companies;
+create policy "companies_delete_manager" on companies for delete to authenticated using (true);
+
+drop policy if exists "products_update_manager" on products;
+create policy "products_update_manager" on products for update to authenticated using (true);
+drop policy if exists "products_delete_manager" on products;
+create policy "products_delete_manager" on products for delete to authenticated using (true);
+
+drop policy if exists "receipt_items_delete_draft" on receipt_items;
+create policy "receipt_items_delete_draft" on receipt_items for delete to authenticated
+  using (
+    exists (
+      select 1 from receipts r
+      where r.id = receipt_id and r.status = 'taslak' and r.received_by = auth.uid()
+    )
+  );
