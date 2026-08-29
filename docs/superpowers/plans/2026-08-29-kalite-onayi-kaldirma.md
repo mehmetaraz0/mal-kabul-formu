@@ -68,11 +68,18 @@ tests/
 -- mevcut satırlar bozulmasın diye) — ama aşağıdaki politikalar artık role='depo_yonetici'
 -- / role='kalite_ekibi' kontrolü YAPMIYOR, sadece received_by = auth.uid() (sahiplik).
 
+-- ÖNEMLİ (Task 1 review'da bulundu): status'a 'onaylandi' da izin vermek "ileride biri
+-- doğrudan onaylandi insert eder" diye eklenmişti ama BU GERÇEK BİR AÇIK: RPC dışında
+-- (ör. doğrudan PostgREST çağrısı) status='onaylandi' ile SIFIR ürünlü bir insert yapılabilir,
+-- çünkü check_receipt_approval (0007) tetikleyicisi sadece `before update`'te çalışır, INSERT'te
+-- HİÇ tetiklenmez. RPC zaten HER ZAMAN önce 'taslak' insert edip ardından aynı transaction
+-- içinde UPDATE ile 'onaylandi'ya taşıyor (bu UPDATE, tetikleyiciyi doğru şekilde çalıştırır) —
+-- yani insert politikasının 'onaylandi'ya hiç izin vermesi gerekmiyordu. Sadece 'taslak'.
 drop policy if exists "receipts_insert_manager" on receipts;
 create policy "receipts_insert_manager" on receipts for insert to authenticated
   with check (
     received_by = auth.uid()
-    and status in ('taslak', 'onaylandi')
+    and status = 'taslak'
     and quality_by is null
     and quality_note is null
   );
