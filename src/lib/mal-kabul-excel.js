@@ -45,10 +45,16 @@ function sablonBaytlari(template) {
  * dizisi worksheet id'siyle indekslenir (1'den başlar — `get worksheets()` `.slice(1)`
  * yapar, yani 0. indeks hiçbir zaman okunmaz) ve şablondan yüklenen her sayfa id=1
  * ile gelir. Benzersiz id/orderNo atanmazsa sayfalar birbirinin üzerine yazar.
+ *
+ * `logoArrayBuffer` (opsiyonel): verilirse şirket logosu (PNG) şablonun A1:B2
+ * birleştirilmiş hücresine (logo için ayrılmış boş alan) HER sayfada anchor'lanır.
+ * Verilmezse (ör. `/logo.png` henüz yoksa) davranış eskisiyle birebir aynıdır — hiçbir
+ * resim eklenmez, mevcut testler bu yüzden değişmeden geçer.
  */
-export async function buildMalKabulWorkbook(receiptsWithItems, templateArrayBuffer) {
+export async function buildMalKabulWorkbook(receiptsWithItems, templateArrayBuffer, logoArrayBuffer) {
   const sablon = sablonBaytlari(templateArrayBuffer);
   const workbook = new ExcelJS.Workbook();
+  let logoImageId = null;
 
   // Tüm kayıtların satırlarını, hangi kayda (receipt) ait olduklarını taşıyarak
   // tek bir akışa düzleştir — sayfalama bu akış üzerinde, kayıt sınırlarını
@@ -103,6 +109,12 @@ export async function buildMalKabulWorkbook(receiptsWithItems, templateArrayBuff
       // gerçek (anchor'lı) bir logo eklendiği anda writeBuffer() doğrudan çöker:
       // "Cannot read properties of undefined (reading 'name')" (worksheet-xform.js).
       workbook.media = pageWorkbook.media;
+      // Şirket logosu, şablonun kendi (varsa) rich-data görselini korumak için
+      // `workbook.media = pageWorkbook.media` atamasından SONRA, mevcut diziye
+      // EKLENİYOR (push) — önce eklenip sonra üstüne yazılırsa kaybolur.
+      if (logoArrayBuffer) {
+        logoImageId = workbook.addImage({ buffer: sablonBaytlari(logoArrayBuffer), extension: 'png' });
+      }
       // `definedNames` BİLEREK kopyalanmıyor. Yazdırma alanı zaten worksheet'in
       // `pageSetup.printArea`'sında taşınır ve ExcelJS onu yazarken sayfanın GÜNCEL
       // adıyla yeniden üretir ('Sayfa 1'!$A$1:$P$29) — doğrulandı. Geriye kalan
@@ -118,6 +130,12 @@ export async function buildMalKabulWorkbook(receiptsWithItems, templateArrayBuff
     sheet.orderNo = pageIndex;
     sheet._workbook = workbook;
     workbook._worksheets[id] = sheet;
+    // Logo her sayfada görünmeli (PDF/print çıktısındaki gibi) — id ataması ve
+    // workbook bağlantısından SONRA (Image nesnesi worksheet üzerinden workbook'a
+    // erişebilsin diye, bkz. src/doc/image.js).
+    if (logoImageId !== null) {
+      sheet.addImage(logoImageId, 'A1:B2');
+    }
   }
 
   return workbook;

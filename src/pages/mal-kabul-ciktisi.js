@@ -145,7 +145,17 @@ export async function renderMalKabulCiktisi(container) {
       const res = await fetch(`${import.meta.env.BASE_URL}sablonlar/mal-kabul-formu-sablonu.xlsx`);
       if (!res.ok) throw new Error(`Şablon indirilemedi (${res.status})`);
       const templateBuf = await res.arrayBuffer();
-      const workbook = await buildMalKabulWorkbook([{ receipt, items }], templateBuf);
+      // Logo opsiyonel — dosya henüz yoksa (veya ağ hatası) sessizce logosuz devam edilir,
+      // Excel oluşturma tamamen başarısız olmaz (mal-kabul-ciktisi.js'teki <img onerror>
+      // ile aynı "logo eksikse sessizce atla" ilkesi).
+      let logoBuf;
+      try {
+        const logoRes = await fetch(`${import.meta.env.BASE_URL}logo.png`);
+        if (logoRes.ok) logoBuf = await logoRes.arrayBuffer();
+      } catch {
+        // logo olmadan devam
+      }
+      const workbook = await buildMalKabulWorkbook([{ receipt, items }], templateBuf, logoBuf);
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

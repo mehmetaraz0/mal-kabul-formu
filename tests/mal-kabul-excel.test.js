@@ -21,6 +21,12 @@ async function sablonBytes() {
   return new Uint8Array(await sablon());
 }
 
+const LOGO_PATH = resolve(process.cwd(), 'public/logo.png');
+async function logo() {
+  const buf = await readFile(LOGO_PATH);
+  return buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+}
+
 function ornekReceipt(overrides = {}) {
   return {
     receipt_date: '2026-08-27',
@@ -218,6 +224,34 @@ describe('buildMalKabulWorkbook', () => {
     expect(s2.getCell('C6').value).toContain('IRS-B');
     // Sayfa 2'de sadece 2 veri satırı var, 3.'sü boş.
     expect(s2.getCell('A7').value).toBeNull();
+  });
+
+  it('logoArrayBuffer verilmezse hiçbir sayfaya resim eklenmez (eski davranış korunur)', async () => {
+    const wb = await buildMalKabulWorkbook([{ receipt: ornekReceipt(), items: [ornekOge()] }], await sablon());
+    expect(wb.worksheets[0].getImages()).toHaveLength(0);
+  });
+
+  it('logoArrayBuffer verildiğinde HER sayfaya tam olarak A1:B2 aralığına anchor\'lanmış tek resim eklenir', async () => {
+    const items = Array.from({ length: 14 }, (_, i) => ornekOge({ lot_no: `LOT-${i}` }));
+    const wb = await buildMalKabulWorkbook([{ receipt: ornekReceipt(), items }], await sablon(), await logo());
+    expect(wb.worksheets).toHaveLength(2);
+    for (const ws of wb.worksheets) {
+      const images = ws.getImages();
+      expect(images).toHaveLength(1);
+      expect(images[0].range.tl.nativeCol).toBe(0); // A
+      expect(images[0].range.tl.nativeRow).toBe(0); // 1
+    }
+    // Logo tek bir resim olarak workbook.media'da bir kez yer almalı (her sayfada
+    // aynı imageId'ye referans verilir, resim baytları N kez kopyalanmaz).
+    expect(wb.media.filter((m) => m.type === 'image')).toHaveLength(2); // şablonun kendi logosu + eklenen logo
+  });
+
+  it('logo eklenmesi şablonun kendi (varsa) media koleksiyonunu bozmadan yazma çökmeden çalışır', async () => {
+    const wb = await buildMalKabulWorkbook([{ receipt: ornekReceipt(), items: [ornekOge()] }], await sablon(), await logo());
+    const buffer = await wb.xlsx.writeBuffer();
+    const tekrar = new ExcelJS.Workbook();
+    await tekrar.xlsx.load(buffer);
+    expect(tekrar.worksheets[0].getImages()).toHaveLength(1);
   });
 
   it('yazılan dosya geçerli bir .xlsx olarak geri okunabilir (round-trip)', async () => {
