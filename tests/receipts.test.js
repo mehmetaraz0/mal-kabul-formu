@@ -64,11 +64,7 @@ vi.mock('../src/lib/supabase.js', () => {
 
 import {
   createReceiptWithItems,
-  submitForQuality,
-  listPendingQuality,
-  getReceiptDetail,
-  updateItemUygunluk,
-  finalizeQuality
+  getReceiptDetail
 } from '../src/lib/receipts.js';
 import { supabase } from '../src/lib/supabase.js';
 
@@ -158,12 +154,6 @@ describe('receipts', () => {
     expect(generated).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
   });
 
-  it('listPendingQuality kalite_bekliyor kayıtlarını döner', async () => {
-    const result = await listPendingQuality();
-    expect(result).toHaveLength(1);
-    expect(result[0].companies.name).toBe('TEST FIRMA');
-  });
-
   it('getReceiptDetail receipt ve items birlikte döner', async () => {
     const result = await getReceiptDetail('r1');
     expect(result.receipt.status).toBe('kalite_bekliyor');
@@ -182,28 +172,23 @@ describe('receipts', () => {
     expect(result.items[0].yari_omur_gecti).toBe(false);
   });
 
-  it('finalizeQuality tüm satırlar işaretlenmeden onaylandi kabul etmez', async () => {
-    await expect(finalizeQuality('r1', { decision: 'onaylandi', qualityBy: 'u2', qualityNote: '' }))
-      .rejects.toThrow('Tüm satırlar uygun/uygun değil olarak işaretlenmeden onaylanamaz');
+  it('createReceiptWithItems her satır için uygunluk ve not değerini RPC\'ye gönderir', async () => {
+    await createReceiptWithItems({
+      companyId: 1, receiptDate: '2026-08-29', irsaliyeNo: '', siparisNo: '', receivedBy: 'u1',
+      items: [{ productId: 1, lotNo: 'L1', skt: '2026-09-01', quantity: 10, unit: 'kg', uygunluk: 'uygun', note: 'Kutu ezik' }]
+    });
+    const rpcCall = supabase.rpc.mock.calls.find((call) => call[0] === 'create_receipt_with_items');
+    expect(rpcCall[1].p_items[0].uygunluk).toBe('uygun');
+    expect(rpcCall[1].p_items[0].note).toBe('Kutu ezik');
   });
 
-  it('submitForQuality 0 satır güncellenirse hata fırlatır', async () => {
-    mockState.updateResult = { data: [], error: null };
-    await expect(submitForQuality('r1')).rejects.toThrow('Kayıt güncellenemedi');
-  });
-
-  it('updateItemUygunluk 0 satır güncellenirse hata fırlatır', async () => {
-    mockState.updateResult = { data: [], error: null };
-    await expect(updateItemUygunluk('i1', 'uygun', null)).rejects.toThrow('Kayıt güncellenemedi');
-  });
-
-  it('finalizeQuality 0 satır güncellenirse hata fırlatır', async () => {
-    mockState.updateResult = { data: [], error: null };
-    await expect(finalizeQuality('r1', { decision: 'reddedildi', qualityBy: 'u2', qualityNote: '' }))
-      .rejects.toThrow('Kayıt güncellenemedi');
-  });
-
-  it('submitForQuality satır güncellenirse hata fırlatmaz', async () => {
-    await expect(submitForQuality('r1')).resolves.toBeUndefined();
+  it('createReceiptWithItems uygunluk/not verilmezse RPC\'ye null/undefined göndermez, RPC kendi varsayılanını kullanır', async () => {
+    await createReceiptWithItems({
+      companyId: 1, receiptDate: '2026-08-29', irsaliyeNo: '', siparisNo: '', receivedBy: 'u1',
+      items: [{ productId: 1, lotNo: 'L1', skt: '2026-09-01', quantity: 10, unit: 'kg' }]
+    });
+    const rpcCall = supabase.rpc.mock.calls.find((call) => call[0] === 'create_receipt_with_items');
+    expect(rpcCall[1].p_items[0].uygunluk).toBeUndefined();
+    expect(rpcCall[1].p_items[0].note).toBeUndefined();
   });
 });

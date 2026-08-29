@@ -1,14 +1,5 @@
 import { supabase } from './supabase.js';
 
-// PostgREST, WHERE/RLS koşuluna hiçbir satır uymadığında da `error: null` döner. Bu "başarılı"
-// gibi görünür ama aslında hiçbir şey değişmemiştir (örn. kayıt başka biri tarafından zaten
-// işlenmiş). Bu yüzden her UPDATE'te `.select()` ile dönen satır sayısını doğruluyoruz.
-function assertUpdated(data) {
-  if (!data || data.length === 0) {
-    throw new Error('Kayıt güncellenemedi (başka biri tarafından değiştirilmiş olabilir)');
-  }
-}
-
 export async function createReceiptWithItems({
   companyId,
   receiptDate,
@@ -42,33 +33,15 @@ export async function createReceiptWithItems({
       quantity: item.quantity,
       unit: item.unit,
       urunSicakligi: item.urunSicakligi ?? null,
-      yariOmurGecti: item.yariOmurGecti ?? false
+      yariOmurGecti: item.yariOmurGecti ?? false,
+      uygunluk: item.uygunluk,
+      note: item.note
     })),
     p_submit_to_quality: submitToQuality,
     p_fatura_no: faturaNo || null,
     p_arac_hijyen_uygun: aracHijyenUygun ?? null,
     p_arac_sicaklik: aracSicaklik ?? null
   });
-  if (error) throw error;
-  return data;
-}
-
-export async function submitForQuality(receiptId) {
-  const { data, error } = await supabase
-    .from('receipts')
-    .update({ status: 'kalite_bekliyor' })
-    .eq('id', receiptId)
-    .select();
-  if (error) throw error;
-  assertUpdated(data);
-}
-
-export async function listPendingQuality() {
-  const { data, error } = await supabase
-    .from('receipts')
-    .select('id, receipt_date, irsaliye_no, siparis_no, companies (name)')
-    .eq('status', 'kalite_bekliyor')
-    .order('receipt_date');
   if (error) throw error;
   return data;
 }
@@ -103,30 +76,6 @@ export async function getReceiptDetail(receiptId) {
     },
     items
   };
-}
-
-export async function updateItemUygunluk(itemId, uygunluk, note) {
-  const { data, error } = await supabase
-    .from('receipt_items')
-    .update({ uygunluk, note: note || null })
-    .eq('id', itemId)
-    .select();
-  if (error) throw error;
-  assertUpdated(data);
-}
-
-export async function finalizeQuality(receiptId, { decision, qualityBy, qualityNote }) {
-  const { items } = await getReceiptDetail(receiptId);
-  if (decision === 'onaylandi' && items.some((i) => i.uygunluk === 'beklemede')) {
-    throw new Error('Tüm satırlar uygun/uygun değil olarak işaretlenmeden onaylanamaz');
-  }
-  const { data, error } = await supabase
-    .from('receipts')
-    .update({ status: decision, quality_by: qualityBy, quality_note: qualityNote || null })
-    .eq('id', receiptId)
-    .select();
-  if (error) throw error;
-  assertUpdated(data);
 }
 
 export async function listReceipts({ companyId, startDate, endDate, status, productId } = {}) {
