@@ -3,9 +3,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // vi.mock çağrıları dosyanın en tepesine "hoist" edilir; factory içinde referans verilen bir
 // değişken vitest 2.x'te ya "mock" ile başlamalı ya da vi.hoisted() ile tanımlanmalı (bkz.
 // offline-queue.test.js'teki aynı gerekçe).
-const { getCurrentProfile, hasRole, createReceiptWithItems, enqueueReceipt, refreshOfflineBanner, listCompanies, listProducts } = vi.hoisted(() => ({
+const { getCurrentProfile, createReceiptWithItems, enqueueReceipt, refreshOfflineBanner, listCompanies, listProducts } = vi.hoisted(() => ({
   getCurrentProfile: vi.fn(),
-  hasRole: vi.fn(),
   createReceiptWithItems: vi.fn(),
   enqueueReceipt: vi.fn(),
   refreshOfflineBanner: vi.fn(() => Promise.resolve()),
@@ -13,7 +12,7 @@ const { getCurrentProfile, hasRole, createReceiptWithItems, enqueueReceipt, refr
   listProducts: vi.fn()
 }));
 
-vi.mock('../src/lib/auth.js', () => ({ getCurrentProfile, hasRole }));
+vi.mock('../src/lib/auth.js', () => ({ getCurrentProfile }));
 vi.mock('../src/lib/receipts.js', () => ({ createReceiptWithItems }));
 vi.mock('../src/lib/offline-queue.js', () => ({ enqueueReceipt }));
 vi.mock('../src/components/offline-banner.js', () => ({ refreshOfflineBanner }));
@@ -55,7 +54,6 @@ describe('yeni-kabul save() - yerel doğrulama vs. çevrimdışı kuyruğa yazma
   beforeEach(async () => {
     vi.clearAllMocks();
     getCurrentProfile.mockResolvedValue({ id: 'u1', full_name: 'Depo Yöneticisi', role: 'depo_yonetici' });
-    hasRole.mockReturnValue(true);
     listCompanies.mockResolvedValue([{ id: 1, name: 'TEST FIRMA' }]);
     listProducts.mockResolvedValue([{ id: 1, code: 'P1', name: 'URUN 1', unit: 'kg', category: 'ET' }]);
 
@@ -149,6 +147,20 @@ describe('yeni-kabul save() - yerel doğrulama vs. çevrimdışı kuyruğa yazma
 
     const msg = container.querySelector('#kabul-msg');
     expect(msg.textContent).toBe("Hata: Tüm satırların miktarı 0'dan büyük olmalı");
+    expect(createReceiptWithItems).not.toHaveBeenCalled();
+    expect(enqueueReceipt).not.toHaveBeenCalled();
+  });
+
+  it('herhangi bir satır beklemede iken "Kaydet" (final) tıklanırsa hata gösterir ve enqueueReceipt/createReceiptWithItems çağrılmaz', async () => {
+    selectFirstFromSearchList(container, 'firma-picker');
+    addFirstProductRow(container);
+    // uygunluk hiç değiştirilmedi, varsayılan 'beklemede' kaldı.
+
+    container.querySelector('#submit-quality-btn').click();
+    await flushAsync();
+
+    const msg = container.querySelector('#kabul-msg');
+    expect(msg.textContent).toContain('Uygun / Uygun Değil');
     expect(createReceiptWithItems).not.toHaveBeenCalled();
     expect(enqueueReceipt).not.toHaveBeenCalled();
   });

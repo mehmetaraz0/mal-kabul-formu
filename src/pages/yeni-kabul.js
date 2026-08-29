@@ -2,7 +2,7 @@ import { listCompanies } from '../lib/companies.js';
 import { listProducts } from '../lib/products.js';
 import { renderSearchList } from '../components/search-list.js';
 import { createReceiptWithItems } from '../lib/receipts.js';
-import { getCurrentProfile, hasRole } from '../lib/auth.js';
+import { getCurrentProfile } from '../lib/auth.js';
 import { escapeHtml } from '../lib/html.js';
 import { isNetworkError } from '../lib/offline-cache.js';
 import { enqueueReceipt } from '../lib/offline-queue.js';
@@ -10,10 +10,6 @@ import { refreshOfflineBanner } from '../components/offline-banner.js';
 
 export async function renderYeniKabul(container) {
   const profile = await getCurrentProfile();
-  if (!hasRole(profile, 'depo_yonetici')) {
-    container.innerHTML = '<p>Bu sayfa sadece depo yöneticisi rolüne açıktır.</p>';
-    return;
-  }
 
   const [companies, products] = await Promise.all([listCompanies(), listProducts()]);
 
@@ -55,7 +51,7 @@ export async function renderYeniKabul(container) {
       <div style="overflow-x:auto;">
         <table id="items-table" class="card-table">
           <thead>
-            <tr><th>Ürün</th><th>Lot No</th><th>SKT</th><th>Miktar</th><th>Birim</th><th>Ürün Sıcaklığı</th><th>Yarı Ömür Geçti mi</th><th></th></tr>
+            <tr><th>Ürün</th><th>Lot No</th><th>SKT</th><th>Miktar</th><th>Birim</th><th>Ürün Sıcaklığı</th><th>Yarı Ömür Geçti mi</th><th>Uygunluk</th><th>Not</th><th></th></tr>
           </thead>
           <tbody id="items-body"></tbody>
         </table>
@@ -64,7 +60,7 @@ export async function renderYeniKabul(container) {
 
     <div style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
       <button id="save-draft-btn" class="btn-ghost">Taslak Kaydet</button>
-      <button id="submit-quality-btn">Kaydet ve Kalite Onayına Gönder</button>
+      <button id="submit-quality-btn">Kaydet</button>
     </div>
     <p id="kabul-msg"></p>
   `;
@@ -98,6 +94,14 @@ export async function renderYeniKabul(container) {
         <td>${escapeHtml(item.unit)}</td>
         <td><input type="number" step="0.1" data-field="urunSicakligi" data-index="${i}" value="${escapeHtml(item.urunSicakligi)}" style="width:90px;" /></td>
         <td><input type="checkbox" data-field="yariOmurGecti" data-index="${i}" ${item.yariOmurGecti ? 'checked' : ''} /></td>
+        <td>
+          <select data-field="uygunluk" data-index="${i}">
+            <option value="beklemede" ${item.uygunluk === 'beklemede' ? 'selected' : ''}>Beklemede</option>
+            <option value="uygun" ${item.uygunluk === 'uygun' ? 'selected' : ''}>Uygun</option>
+            <option value="uygun_degil" ${item.uygunluk === 'uygun_degil' ? 'selected' : ''}>Uygun Değil</option>
+          </select>
+        </td>
+        <td><input type="text" data-field="note" data-index="${i}" value="${escapeHtml(item.note)}" style="width:120px;" placeholder="Not" /></td>
         <td><button data-remove="${i}">Sil</button></td>
       </tr>`
       )
@@ -108,6 +112,12 @@ export async function renderYeniKabul(container) {
         const idx = Number(input.dataset.index);
         const field = input.dataset.field;
         state.items[idx][field] = input.checked;
+      });
+    });
+    tbody.querySelectorAll('select[data-field="uygunluk"]').forEach((select) => {
+      select.addEventListener('change', () => {
+        const idx = Number(select.dataset.index);
+        state.items[idx].uygunluk = select.value;
       });
     });
     tbody.querySelectorAll('input:not([type="checkbox"])').forEach((input) => {
@@ -131,7 +141,7 @@ export async function renderYeniKabul(container) {
     getKey: (p) => p.id,
     placeholder: 'Eklenecek ürünü ara...',
     onSelect: (p) => {
-      state.items.push({ productId: p.id, code: p.code, name: p.name, unit: p.unit, lotNo: '', skt: '', quantity: 0, urunSicakligi: '', yariOmurGecti: false });
+      state.items.push({ productId: p.id, code: p.code, name: p.name, unit: p.unit, lotNo: '', skt: '', quantity: 0, urunSicakligi: '', yariOmurGecti: false, uygunluk: 'beklemede', note: '' });
       renderItemsBody();
     }
   });
@@ -180,6 +190,15 @@ export async function renderYeniKabul(container) {
       msg.textContent = 'Hata: Tarih girilmeli';
       return;
     }
+    // Aynı aile: nihai "Kaydet" (sendToQuality=true) veritabanı tarafında da
+    // check_receipt_approval tetikleyicisiyle (0007) reddediliyor — burada erken ve anlaşılır
+    // bir hata için tekrarlanıyor. Çevrimdışıyken bu da RPC'ye hiç gitmeden yerel olarak
+    // yakalanmalı (yukarıdaki diğer yerel kontrollerle aynı gerekçe).
+    if (sendToQuality && state.items.some((item) => item.uygunluk === 'beklemede')) {
+      msg.style.color = '#b00020';
+      msg.textContent = "Hata: Tüm satırların uygunluğu (Uygun / Uygun Değil) işaretlenmeden kaydedilemez";
+      return;
+    }
 
     // Çift gönderim engeli: yavaş bir kayıt sırasında ikinci bir tıklama ikinci bir kayıt yaratmasın.
     buttons.forEach((btn) => { btn.disabled = true; });
@@ -212,7 +231,7 @@ export async function renderYeniKabul(container) {
       try {
         await createReceiptWithItems({ ...payload, clientUuid, submitToQuality: sendToQuality });
         msg.style.color = 'var(--color-success-text)';
-        msg.textContent = sendToQuality ? 'Kaydedildi ve kalite onayına gönderildi.' : 'Taslak olarak kaydedildi.';
+        msg.textContent = sendToQuality ? 'Kayıt tamamlandı.' : 'Taslak olarak kaydedildi.';
       } catch (err) {
         // Sadece GERÇEK ağ hataları kuyruğa alınır (bkz. offline-cache.js/isNetworkError).
         // RLS reddi, validasyon hatası gibi uygulama seviyesi hatalar burada yeniden fırlatılıp
