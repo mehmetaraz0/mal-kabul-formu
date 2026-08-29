@@ -8,7 +8,7 @@ const receiptsQuery = {
   in: vi.fn(function () { return this; }),
   order: vi.fn(function () { return this; }),
   limit: vi.fn(() => Promise.resolve({
-    data: [{ id: 'r1', receipt_date: '2026-08-20', irsaliye_no: 'IRS-1', siparis_no: null, status: 'onaylandi', companies: { name: 'TEST FIRMA' } }],
+    data: [{ id: 'r1', receipt_date: '2026-08-20', irsaliye_no: 'IRS-1', status: 'onaylandi', companies: { name: 'TEST FIRMA' } }],
     error: null
   }))
 };

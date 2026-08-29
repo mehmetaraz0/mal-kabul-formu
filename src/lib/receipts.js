@@ -4,7 +4,6 @@ export async function createReceiptWithItems({
   companyId,
   receiptDate,
   irsaliyeNo,
-  siparisNo,
   receivedBy,
   items,
   clientUuid,
@@ -20,7 +19,6 @@ export async function createReceiptWithItems({
     p_company_id: companyId,
     p_receipt_date: receiptDate,
     p_irsaliye_no: irsaliyeNo || null,
-    p_siparis_no: siparisNo || null,
     p_received_by: receivedBy,
     // Çağıran kendi UUID'sini verebilir (Plan 5'in çevrimdışı kuyruğu tekrar oynatırken aynı
     // UUID'yi kullanarak idempotency sağlayabilsin diye).
@@ -50,7 +48,7 @@ export async function getReceiptDetail(receiptId) {
   const { data: receipt, error: receiptError } = await supabase
     .from('receipts')
     .select(`
-      id, company_id, receipt_date, irsaliye_no, siparis_no, status, received_by, quality_by, quality_note,
+      id, company_id, receipt_date, irsaliye_no, status, received_by, quality_by, quality_note,
       fatura_no, arac_hijyen_uygun, arac_sicaklik,
       companies (name),
       received_profile:profiles!receipts_received_by_fkey (full_name),
@@ -81,7 +79,7 @@ export async function getReceiptDetail(receiptId) {
 export async function listReceipts({ companyId, startDate, endDate, status, productId } = {}) {
   let query = supabase
     .from('receipts')
-    .select('id, receipt_date, irsaliye_no, siparis_no, status, companies (name)');
+    .select('id, receipt_date, irsaliye_no, status, companies (name)');
 
   if (companyId) query = query.eq('company_id', companyId);
   if (startDate) query = query.gte('receipt_date', startDate);

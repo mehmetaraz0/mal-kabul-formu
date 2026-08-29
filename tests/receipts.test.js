@@ -69,7 +69,7 @@ import {
 import { supabase } from '../src/lib/supabase.js';
 
 const validItems = [{ productId: 1, lotNo: 'L1', skt: '2026-09-01', quantity: 10, unit: 'kg' }];
-const baseArgs = { companyId: 1, receiptDate: '2026-08-26', irsaliyeNo: 'IRS-1', siparisNo: '', receivedBy: 'u1' };
+const baseArgs = { companyId: 1, receiptDate: '2026-08-26', irsaliyeNo: 'IRS-1', receivedBy: 'u1' };
 
 describe('receipts', () => {
   beforeEach(() => {
@@ -174,7 +174,7 @@ describe('receipts', () => {
 
   it('createReceiptWithItems her satır için uygunluk ve not değerini RPC\'ye gönderir', async () => {
     await createReceiptWithItems({
-      companyId: 1, receiptDate: '2026-08-29', irsaliyeNo: '', siparisNo: '', receivedBy: 'u1',
+      companyId: 1, receiptDate: '2026-08-29', irsaliyeNo: '', receivedBy: 'u1',
       items: [{ productId: 1, lotNo: 'L1', skt: '2026-09-01', quantity: 10, unit: 'kg', uygunluk: 'uygun', note: 'Kutu ezik' }]
     });
     const rpcCall = supabase.rpc.mock.calls.find((call) => call[0] === 'create_receipt_with_items');
@@ -184,7 +184,7 @@ describe('receipts', () => {
 
   it('createReceiptWithItems uygunluk/not verilmezse RPC\'ye null/undefined göndermez, RPC kendi varsayılanını kullanır', async () => {
     await createReceiptWithItems({
-      companyId: 1, receiptDate: '2026-08-29', irsaliyeNo: '', siparisNo: '', receivedBy: 'u1',
+      companyId: 1, receiptDate: '2026-08-29', irsaliyeNo: '', receivedBy: 'u1',
       items: [{ productId: 1, lotNo: 'L1', skt: '2026-09-01', quantity: 10, unit: 'kg' }]
     });
     const rpcCall = supabase.rpc.mock.calls.find((call) => call[0] === 'create_receipt_with_items');

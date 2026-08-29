@@ -26,7 +26,6 @@ export async function renderYeniKabul(container) {
         </div>
         <div class="field"><label class="field-label" for="kabul-tarih">Tarih *</label><input type="date" id="kabul-tarih" value="${new Date().toISOString().slice(0, 10)}" /></div>
         <div class="field"><label class="field-label" for="kabul-irsaliye">İrsaliye No</label><input type="text" id="kabul-irsaliye" /></div>
-        <div class="field"><label class="field-label" for="kabul-siparis">Sipariş No</label><input type="text" id="kabul-siparis" /></div>
         <div class="field"><label class="field-label" for="kabul-fatura">Fatura No</label><input type="text" id="kabul-fatura" placeholder="Fatura No" /></div>
         <div class="field">
           <label class="field-label" for="kabul-arac-hijyen">Araç Hijyeni</label>
@@ -216,7 +215,6 @@ export async function renderYeniKabul(container) {
         companyId: state.companyId,
         receiptDate: container.querySelector('#kabul-tarih').value,
         irsaliyeNo: container.querySelector('#kabul-irsaliye').value,
-        siparisNo: container.querySelector('#kabul-siparis').value,
         receivedBy: profile.id,
         // Derin kopya (öğe başına yeni nesne): aşağıdaki `await enqueueReceipt(...)` sırasında
         // kullanıcı tabloda başka bir satırı düzenlerse (input change event'i state.items'ı

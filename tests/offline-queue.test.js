@@ -106,7 +106,7 @@ describe('offline-queue', () => {
   it('syncQueuedReceipts tek bir atomik createReceiptWithItems cagrisi yapar (ayri submitForQuality YOK)', async () => {
     await enqueueReceipt({
       clientUuid: 'c1',
-      payload: { companyId: 1, receiptDate: '2026-08-28', irsaliyeNo: 'IRS-1', siparisNo: '', receivedBy: 'u1', items: [{ productId: 1, quantity: 1, unit: 'kg' }], faturaNo: 'F-1', aracHijyenUygun: true, aracSicaklik: 4.1 },
+      payload: { companyId: 1, receiptDate: '2026-08-28', irsaliyeNo: 'IRS-1', receivedBy: 'u1', items: [{ productId: 1, quantity: 1, unit: 'kg' }], faturaNo: 'F-1', aracHijyenUygun: true, aracSicaklik: 4.1 },
       sendToQuality: true
     });
     createReceiptWithItems.mockResolvedValue('server-id-1');
