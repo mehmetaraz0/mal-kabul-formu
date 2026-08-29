@@ -4,7 +4,6 @@ import { renderLogin } from './pages/login.js';
 import { renderFirmalar } from './pages/firmalar.js';
 import { renderUrunler } from './pages/urunler.js';
 import { renderYeniKabul } from './pages/yeni-kabul.js';
-import { renderKaliteOnay } from './pages/kalite-onay.js';
 import { renderArama } from './pages/arama.js';
 import { renderMalKabulCiktisi } from './pages/mal-kabul-ciktisi.js';
 import { escapeHtml } from './lib/html.js';
@@ -131,8 +130,7 @@ async function renderApp() {
         <button class="pill-tab" data-nav="/">Ana Sayfa</button>
         <button class="pill-tab" data-nav="/firmalar">Firmalar</button>
         <button class="pill-tab" data-nav="/urunler">Ürünler</button>
-        ${profile.role === 'depo_yonetici' ? '<button class="pill-tab" data-nav="/yeni-kabul">Yeni Mal Kabul</button>' : ''}
-        ${profile.role === 'kalite_ekibi' ? '<button class="pill-tab" data-nav="/kalite-onay">Kalite Onayı</button>' : ''}
+        <button class="pill-tab" data-nav="/yeni-kabul">Yeni Mal Kabul</button>
         <button class="pill-tab" data-nav="/arama">Kayıt Ara</button>
       </nav>
       <main id="page-content" style="padding:1.25rem;"></main>
@@ -151,18 +149,12 @@ async function renderApp() {
 
     const pageContent = app.querySelector('#page-content');
     registerRoute('/', (c) => {
-      // Ana sayfadaki kısayol da nav ile aynı role kuralına tabi.
-      if (profile.role !== 'depo_yonetici') {
-        c.innerHTML = '';
-        return;
-      }
       c.innerHTML = '<p><button class="btn-accent" data-nav="/yeni-kabul">+ Yeni Mal Kabul</button></p>';
       c.querySelector('[data-nav]').addEventListener('click', () => navigate('/yeni-kabul'));
     });
     registerRoute('/firmalar', renderFirmalar);
     registerRoute('/urunler', renderUrunler);
     registerRoute('/yeni-kabul', renderYeniKabul);
-    registerRoute('/kalite-onay', renderKaliteOnay);
     registerRoute('/arama', renderArama);
     registerRoute('/mal-kabul-ciktisi', renderMalKabulCiktisi);
     startRouter(pageContent);
