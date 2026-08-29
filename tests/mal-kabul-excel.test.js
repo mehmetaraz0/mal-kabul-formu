@@ -50,20 +50,20 @@ function ornekOge(overrides = {}) {
 
 describe('buildMalKabulWorkbook', () => {
   it('13 veya daha az öğe için tek "Sayfa 1" worksheet üretir', async () => {
-    const wb = await buildMalKabulWorkbook(ornekReceipt(), [ornekOge()], await sablon());
+    const wb = await buildMalKabulWorkbook([{ receipt: ornekReceipt(), items: [ornekOge()] }], await sablon());
     expect(wb.worksheets.map((s) => s.name)).toEqual(['Sayfa 1']);
   });
 
   it('14 öğe için iki worksheet üretir (13 + 1)', async () => {
     const items = Array.from({ length: 14 }, (_, i) => ornekOge({ lot_no: `LOT-${i}` }));
-    const wb = await buildMalKabulWorkbook(ornekReceipt(), items, await sablon());
+    const wb = await buildMalKabulWorkbook([{ receipt: ornekReceipt(), items }], await sablon());
     expect(wb.worksheets.map((s) => s.name)).toEqual(['Sayfa 1', 'Sayfa 2']);
     expect(wb.worksheets[0].getCell('D5').value).toContain('LOT-0');
     expect(wb.worksheets[1].getCell('D5').value).toContain('LOT-13');
   });
 
   it('doğru sütunlara doğru verileri yazar', async () => {
-    const wb = await buildMalKabulWorkbook(ornekReceipt(), [ornekOge()], await sablon());
+    const wb = await buildMalKabulWorkbook([{ receipt: ornekReceipt(), items: [ornekOge()] }], await sablon());
     const ws = wb.worksheets[0];
     expect(ws.getCell('A5').value).toBe('2026-08-27');
     expect(ws.getCell('B5').value).toBe('TEST FIRMA A.S.');
@@ -83,7 +83,7 @@ describe('buildMalKabulWorkbook', () => {
 
   it('uygun_degil satırında MKK en-dash, Açıklama not metnini gösterir', async () => {
     const oge = ornekOge({ uygunluk: 'uygun_degil', note: 'SKT geçmiş' });
-    const wb = await buildMalKabulWorkbook(ornekReceipt(), [oge], await sablon());
+    const wb = await buildMalKabulWorkbook([{ receipt: ornekReceipt(), items: [oge] }], await sablon());
     const ws = wb.worksheets[0];
     expect(ws.getCell('M5').value).toBe('–');
     expect(ws.getCell('N5').value).toBe('SKT geçmiş');
@@ -91,24 +91,24 @@ describe('buildMalKabulWorkbook', () => {
 
   it('uygun (ve beklemede) satırında da not girilmişse Açıklama sütunu koşulsuz gösterir (PDF çıktısıyla aynı davranış)', async () => {
     const ogeUygun = ornekOge({ uygunluk: 'uygun', note: 'Kutu hafif ezik, ürün etkilenmemiş' });
-    const wbUygun = await buildMalKabulWorkbook(ornekReceipt(), [ogeUygun], await sablon());
+    const wbUygun = await buildMalKabulWorkbook([{ receipt: ornekReceipt(), items: [ogeUygun] }], await sablon());
     expect(wbUygun.worksheets[0].getCell('N5').value).toBe('Kutu hafif ezik, ürün etkilenmemiş');
 
     const ogeBeklemede = ornekOge({ uygunluk: 'beklemede', note: 'Kalite ekibi inceliyor' });
-    const wbBeklemede = await buildMalKabulWorkbook(ornekReceipt(), [ogeBeklemede], await sablon());
+    const wbBeklemede = await buildMalKabulWorkbook([{ receipt: ornekReceipt(), items: [ogeBeklemede] }], await sablon());
     expect(wbBeklemede.worksheets[0].getCell('N5').value).toBe('Kalite ekibi inceliyor');
   });
 
   it('birim ad ise Adet sütununa, kg ise Kg sütununa yazar', async () => {
     const oge = ornekOge({ quantity: 3, unit: 'ad' });
-    const wb = await buildMalKabulWorkbook(ornekReceipt(), [oge], await sablon());
+    const wb = await buildMalKabulWorkbook([{ receipt: ornekReceipt(), items: [oge] }], await sablon());
     const ws = wb.worksheets[0];
     expect(ws.getCell('K5').value).toBe('');
     expect(ws.getCell('L5').value).toBe(3);
   });
 
   it("boş satırlar 13'e tamamlanana kadar veri yazılmadan bırakılır", async () => {
-    const wb = await buildMalKabulWorkbook(ornekReceipt(), [ornekOge()], await sablon());
+    const wb = await buildMalKabulWorkbook([{ receipt: ornekReceipt(), items: [ornekOge()] }], await sablon());
     const ws = wb.worksheets[0];
     expect(ws.getCell('A6').value).toBeNull();
     expect(ws.getCell('A17').value).toBeNull();
@@ -116,7 +116,7 @@ describe('buildMalKabulWorkbook', () => {
 
   it('şablonun başlık/lejant metnini ve birleştirilmiş hücrelerini her sayfada korur', async () => {
     const items = Array.from({ length: 14 }, (_, i) => ornekOge({ lot_no: `LOT-${i}` }));
-    const wb = await buildMalKabulWorkbook(ornekReceipt(), items, await sablon());
+    const wb = await buildMalKabulWorkbook([{ receipt: ornekReceipt(), items }], await sablon());
     for (const ws of wb.worksheets) {
       expect(ws.getCell('C1').value).toBe('MAL KABUL FORMU');
       expect(ws.getCell('A3').value).toBe('Tarih');
@@ -137,7 +137,7 @@ describe('buildMalKabulWorkbook', () => {
     await tpl.xlsx.load(await sablonBytes());
     expect(tpl.media.length).toBe(1); // şablondaki logo PNG'si
 
-    const wb = await buildMalKabulWorkbook(ornekReceipt(), [ornekOge()], await sablon());
+    const wb = await buildMalKabulWorkbook([{ receipt: ornekReceipt(), items: [ornekOge()] }], await sablon());
     expect(wb.media.length).toBe(tpl.media.length);
   });
 
@@ -153,7 +153,7 @@ describe('buildMalKabulWorkbook', () => {
     const zenginSablon = await tpl.xlsx.writeBuffer();
 
     const items = Array.from({ length: 14 }, (_, i) => ornekOge({ lot_no: `LOT-${i}` }));
-    const wb = await buildMalKabulWorkbook(ornekReceipt(), items, zenginSablon);
+    const wb = await buildMalKabulWorkbook([{ receipt: ornekReceipt(), items }], zenginSablon);
     const buffer = await wb.xlsx.writeBuffer();
 
     const tekrar = new ExcelJS.Workbook();
@@ -172,7 +172,7 @@ describe('buildMalKabulWorkbook', () => {
     const zenginSablon = await tpl.xlsx.writeBuffer();
 
     const items = Array.from({ length: 14 }, (_, i) => ornekOge({ lot_no: `LOT-${i}` }));
-    const wb = await buildMalKabulWorkbook(ornekReceipt(), items, zenginSablon);
+    const wb = await buildMalKabulWorkbook([{ receipt: ornekReceipt(), items }], zenginSablon);
     const tekrar = new ExcelJS.Workbook();
     await tekrar.xlsx.load(await wb.xlsx.writeBuffer());
     for (const ws of tekrar.worksheets) {
@@ -180,9 +180,37 @@ describe('buildMalKabulWorkbook', () => {
     }
   });
 
+  it('birden fazla kayıt verildiğinde her kaydın satırları KENDİ sayfalarına yazılır, sayfa numarası dosya boyunca sıralı devam eder', async () => {
+    const receiptA = ornekReceipt({ companyName: 'FIRMA A', irsaliye_no: 'IRS-A' });
+    const itemsA = Array.from({ length: 14 }, (_, i) => ornekOge({ lot_no: `A-LOT-${i}` }));
+    const receiptB = ornekReceipt({ companyName: 'FIRMA B', irsaliye_no: 'IRS-B' });
+    const itemsB = [ornekOge({ lot_no: 'B-LOT-0' })];
+
+    const wb = await buildMalKabulWorkbook(
+      [
+        { receipt: receiptA, items: itemsA },
+        { receipt: receiptB, items: itemsB }
+      ],
+      await sablon()
+    );
+
+    // A: 14 öğe -> 2 sayfa (Sayfa 1, Sayfa 2). B: 1 öğe -> 1 sayfa. Numaralandırma
+    // dosya boyunca sıralı devam eder, B kendi sayfa 1'inden değil kaldığı yerden sürer.
+    expect(wb.worksheets.map((s) => s.name)).toEqual(['Sayfa 1', 'Sayfa 2', 'Sayfa 3']);
+    expect(wb.worksheets[0].getCell('B5').value).toBe('FIRMA A');
+    expect(wb.worksheets[0].getCell('D5').value).toContain('A-LOT-0');
+    expect(wb.worksheets[1].getCell('B5').value).toBe('FIRMA A');
+    expect(wb.worksheets[1].getCell('D5').value).toContain('A-LOT-13');
+    // B'nin satırı A'nınkiyle karışmadan kendi (3.) sayfasında.
+    expect(wb.worksheets[2].getCell('B5').value).toBe('FIRMA B');
+    expect(wb.worksheets[2].getCell('D5').value).toBe('B-LOT-0');
+    // B'nin tek satırlık sayfasında A'ya ait ikinci bir satır YOK.
+    expect(wb.worksheets[2].getCell('A6').value).toBeNull();
+  });
+
   it('yazılan dosya geçerli bir .xlsx olarak geri okunabilir (round-trip)', async () => {
     const items = Array.from({ length: 14 }, (_, i) => ornekOge({ lot_no: `LOT-${i}` }));
-    const wb = await buildMalKabulWorkbook(ornekReceipt(), items, await sablon());
+    const wb = await buildMalKabulWorkbook([{ receipt: ornekReceipt(), items }], await sablon());
     const buffer = await wb.xlsx.writeBuffer();
 
     const tekrar = new ExcelJS.Workbook();

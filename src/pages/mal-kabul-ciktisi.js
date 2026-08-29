@@ -145,7 +145,7 @@ export async function renderMalKabulCiktisi(container) {
       const res = await fetch(`${import.meta.env.BASE_URL}sablonlar/mal-kabul-formu-sablonu.xlsx`);
       if (!res.ok) throw new Error(`Şablon indirilemedi (${res.status})`);
       const templateBuf = await res.arrayBuffer();
-      const workbook = await buildMalKabulWorkbook(receipt, items, templateBuf);
+      const workbook = await buildMalKabulWorkbook([{ receipt, items }], templateBuf);
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'

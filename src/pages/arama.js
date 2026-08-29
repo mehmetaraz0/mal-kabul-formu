@@ -112,22 +112,23 @@ export async function renderArama(container) {
     msg.textContent = '';
     if (lastResults.length === 0) return;
     try {
-      // exceljs büyük bir bağımlılık — sadece butona basıldığında yüklensin (mal-kabul-ciktisi.js'teki
-      // Excel İndir butonuyla aynı desen).
-      const { buildReceiptsListWorkbook } = await import('../lib/receipts-list-excel.js');
-      const columns = [
-        { key: 'tarih', label: 'Tarih' },
-        { key: 'firma', label: 'Firma' },
-        { key: 'irsaliye_no', label: 'İrsaliye No' },
-        { key: 'durum', label: 'Durum' }
-      ];
-      const rows = lastResults.map((r) => ({
-        tarih: r.receipt_date,
-        firma: r.companies.name,
-        irsaliye_no: r.irsaliye_no,
-        durum: STATUS_LABELS[r.status] || r.status
-      }));
-      const workbook = await buildReceiptsListWorkbook(rows, columns);
+      // Sadece tarih/firma/durum özetiyle değil — gerçek F.22 şablonuyla birebir aynı,
+      // her kaydın TÜM ürün satırlarını içeren detaylı çıktı üretilir (mal-kabul-ciktisi.js'teki
+      // tekli Excel çıktısıyla aynı üretici, birden fazla kayıt için). exceljs büyük bir
+      // bağımlılık — sadece butona basıldığında yüklensin.
+      msg.style.color = '#1a1a1a';
+      msg.textContent = 'Excel oluşturuluyor...';
+      const [{ buildMalKabulWorkbook }, { getReceiptDetail }] = await Promise.all([
+        import('../lib/mal-kabul-excel.js'),
+        import('../lib/receipts.js')
+      ]);
+      const receiptsWithItems = await Promise.all(
+        lastResults.map((r) => getReceiptDetail(r.id))
+      );
+      const res = await fetch(`${import.meta.env.BASE_URL}sablonlar/mal-kabul-formu-sablonu.xlsx`);
+      if (!res.ok) throw new Error(`Şablon indirilemedi (${res.status})`);
+      const templateBuf = await res.arrayBuffer();
+      const workbook = await buildMalKabulWorkbook(receiptsWithItems, templateBuf);
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
@@ -138,6 +139,7 @@ export async function renderArama(container) {
       a.download = `mal-kabul-${new Date().toISOString().slice(0, 10)}.xlsx`;
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 0);
+      msg.textContent = '';
     } catch (err) {
       msg.style.color = '#b00020';
       msg.textContent = 'Excel oluşturulamadı: ' + err.message;
