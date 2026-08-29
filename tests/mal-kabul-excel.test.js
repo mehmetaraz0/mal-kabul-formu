@@ -180,7 +180,11 @@ describe('buildMalKabulWorkbook', () => {
     }
   });
 
-  it('birden fazla kayıt verildiğinde her kaydın satırları KENDİ sayfalarına yazılır, sayfa numarası dosya boyunca sıralı devam eder', async () => {
+  it('birden fazla kayıt verildiğinde satırlar KAYIT SINIRINI GÖZETMEDEN 13\'erli sayfalara bölünür (sayfa değil satır sayısı sınırlar)', async () => {
+    // A: 14 satır (tek başına 13'ü aşıyor), B: 1 satır. Toplam 15 satır -> 2 sayfa
+    // (13 + 2). A'nın 14. satırı ile B'nin 1. satırı AYNI (2.) sayfada yan yana
+    // gelmeli — kullanıcı isteği: "her ürün/kayıt için bir sayfa değil, 13 satır
+    // dolana kadar tek sayfa, 14. satırda yeni sayfa".
     const receiptA = ornekReceipt({ companyName: 'FIRMA A', irsaliye_no: 'IRS-A' });
     const itemsA = Array.from({ length: 14 }, (_, i) => ornekOge({ lot_no: `A-LOT-${i}` }));
     const receiptB = ornekReceipt({ companyName: 'FIRMA B', irsaliye_no: 'IRS-B' });
@@ -194,18 +198,26 @@ describe('buildMalKabulWorkbook', () => {
       await sablon()
     );
 
-    // A: 14 öğe -> 2 sayfa (Sayfa 1, Sayfa 2). B: 1 öğe -> 1 sayfa. Numaralandırma
-    // dosya boyunca sıralı devam eder, B kendi sayfa 1'inden değil kaldığı yerden sürer.
-    expect(wb.worksheets.map((s) => s.name)).toEqual(['Sayfa 1', 'Sayfa 2', 'Sayfa 3']);
-    expect(wb.worksheets[0].getCell('B5').value).toBe('FIRMA A');
-    expect(wb.worksheets[0].getCell('D5').value).toContain('A-LOT-0');
-    expect(wb.worksheets[1].getCell('B5').value).toBe('FIRMA A');
-    expect(wb.worksheets[1].getCell('D5').value).toContain('A-LOT-13');
-    // B'nin satırı A'nınkiyle karışmadan kendi (3.) sayfasında.
-    expect(wb.worksheets[2].getCell('B5').value).toBe('FIRMA B');
-    expect(wb.worksheets[2].getCell('D5').value).toBe('B-LOT-0');
-    // B'nin tek satırlık sayfasında A'ya ait ikinci bir satır YOK.
-    expect(wb.worksheets[2].getCell('A6').value).toBeNull();
+    expect(wb.worksheets.map((s) => s.name)).toEqual(['Sayfa 1', 'Sayfa 2']);
+
+    // Sayfa 1: A'nın ilk 13 satırı (A-LOT-0..A-LOT-12), tamamı FIRMA A.
+    const s1 = wb.worksheets[0];
+    expect(s1.getCell('B5').value).toBe('FIRMA A');
+    expect(s1.getCell('D5').value).toContain('A-LOT-0');
+    expect(s1.getCell('B17').value).toBe('FIRMA A');
+    expect(s1.getCell('D17').value).toContain('A-LOT-12');
+
+    // Sayfa 2: 1. satır A'nın taşan (14.) satırı, 2. satır B'nin satırı — İKİ FARKLI
+    // KAYIT AYNI SAYFADA. Her satır KENDİ kaydının firma/irsaliye bilgisini taşımalı.
+    const s2 = wb.worksheets[1];
+    expect(s2.getCell('B5').value).toBe('FIRMA A');
+    expect(s2.getCell('D5').value).toContain('A-LOT-13');
+    expect(s2.getCell('C5').value).toContain('IRS-A');
+    expect(s2.getCell('B6').value).toBe('FIRMA B');
+    expect(s2.getCell('D6').value).toBe('B-LOT-0');
+    expect(s2.getCell('C6').value).toContain('IRS-B');
+    // Sayfa 2'de sadece 2 veri satırı var, 3.'sü boş.
+    expect(s2.getCell('A7').value).toBeNull();
   });
 
   it('yazılan dosya geçerli bir .xlsx olarak geri okunabilir (round-trip)', async () => {
