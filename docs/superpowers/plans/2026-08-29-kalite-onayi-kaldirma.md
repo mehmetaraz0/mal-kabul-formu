@@ -594,6 +594,93 @@ git commit -m "feat: kalite onayi sayfasini/rotasini kaldir, yeni mal kabulu her
 
 ---
 
+---
+
+### Task 4: Final Review Düzeltmeleri
+
+**Bulgu 1 (Important — regresyon):** `receipts_update_manager_draft`'ın `USING` ifadesi 0012'de sadece `received_by = auth.uid()`'e indirgenmişti — bu, plan öncesindeki halinin (0004'te `status = 'taslak'` şartı da vardı) aksine, sahibinin kendi `onaylandi` kaydını `status='taslak'`'a geri çekip (bu geçiş `check_receipt_approval`'ı tetiklemez çünkü `new.status <> 'onaylandi'`) satırlarını yeniden düzenleyip tekrar `onaylandi`'ye taşıyabilmesine yol açıyordu — onaylanmış bir kaydın artık DEĞİŞMEZ olmadığı anlamına gelir. Migration'daki kendi yorumu bile bunun tersini iddia ediyor ("Kayıt 'onaylandi' olduktan sonra ... hiçbir satır güncellenemez") — bu artık YANLIŞ.
+
+**Bulgu 2 (Important — eksik temizlik):** `companies_update_manager`, `companies_delete_manager`, `products_update_manager`, `products_delete_manager`, `receipt_items_delete_draft` politikaları (hepsi 0002'den, bu plan hiçbirine dokunmadı) hâlâ `p.role = 'depo_yonetici'` kontrolü yapıyor — artık anlamsız bir rol ayrımı (tek-rol modeline geçildi ama bu 5 politika unutuldu). `src/pages/firmalar.js` ve `src/pages/urunler.js`'teki `hasRole(profile, 'depo_yonetici')` kontrolü ve ona bağlı "Not: ... yetkisi sadece depo yöneticisindedir" uyarı metni de aynı nedenle artık yanlış (o iki sayfada zaten düzenleme/silme arayüzü hiç yok, sadece arama+ekleme var — bu not sadece kafa karıştırıyor).
+
+**Files:**
+- Modify: `supabase/migrations/0012_kalite_onayi_kaldir.sql`
+- Modify: `src/pages/firmalar.js`
+- Modify: `src/pages/urunler.js`
+
+- [ ] **Step 1: `supabase/migrations/0012_kalite_onayi_kaldir.sql`'deki `receipts_update_manager_draft` politikasını düzelt**
+
+Dosyadaki mevcut `receipts_update_manager_draft` bloğunu bul ve `using` ifadesine `and status = 'taslak'` ekle (yorum da güncellensin):
+
+```sql
+-- receipts_update_manager_draft: sahibi SADECE kendi TASLAK kaydını 'onaylandi'ya
+-- taşıyabilir. USING'e `status = 'taslak'` şartı EKLENDİ (final review bulgusu) —
+-- bu olmadan sahibi kendi ONAYLANMIŞ kaydını status='taslak'a geri çekip (bu geçiş
+-- check_receipt_approval'ı tetiklemez, çünkü new.status <> 'onaylandi') satırlarını
+-- yeniden düzenleyip tekrar onaylayabiliyordu — onaylanmış bir kayıt artık DEĞİŞMEZ
+-- olmalı.
+drop policy if exists "receipts_update_manager_draft" on receipts;
+create policy "receipts_update_manager_draft" on receipts for update to authenticated
+  using (received_by = auth.uid() and status = 'taslak')
+  with check (
+    received_by = auth.uid()
+    and status in ('taslak', 'onaylandi')
+    and quality_by is null
+    and quality_note is null
+  );
+```
+
+- [ ] **Step 2: Aynı dosyanın SONUNA, `companies`/`products`/`receipt_items_delete_draft` üzerindeki artık anlamsız rol kontrollerini kaldıran bloğu ekle**
+
+```sql
+-- Final review bulgusu 2: 0002'den kalan bu 5 politika hâlâ role='depo_yonetici'
+-- kontrolü yapıyordu — tek-rol modeline geçişte unutulmuşlardı. Artık herhangi bir
+-- authenticated kullanıcı firma/ürün düzenleyebilir/silebilir ve kendi taslak
+-- kaydındaki satırları silebilir (receipts/receipt_items ile aynı tutarlı model).
+drop policy if exists "companies_update_manager" on companies;
+create policy "companies_update_manager" on companies for update to authenticated using (true);
+drop policy if exists "companies_delete_manager" on companies;
+create policy "companies_delete_manager" on companies for delete to authenticated using (true);
+
+drop policy if exists "products_update_manager" on products;
+create policy "products_update_manager" on products for update to authenticated using (true);
+drop policy if exists "products_delete_manager" on products;
+create policy "products_delete_manager" on products for delete to authenticated using (true);
+
+drop policy if exists "receipt_items_delete_draft" on receipt_items;
+create policy "receipt_items_delete_draft" on receipt_items for delete to authenticated
+  using (
+    exists (
+      select 1 from receipts r
+      where r.id = receipt_id and r.status = 'taslak' and r.received_by = auth.uid()
+    )
+  );
+```
+
+- [ ] **Step 3: `src/pages/firmalar.js`'ten `hasRole` kontrolünü ve ona bağlı uyarı notunu kaldır**
+
+`import { getCurrentProfile, hasRole } from '../lib/auth.js';` satırını `import { getCurrentProfile } from '../lib/auth.js';` yap (artık sadece `getCurrentProfile` kullanılıyor — dosyada `profile` değişkeni başka bir yerde kullanılmıyorsa `getCurrentProfile()` çağrısını ve `profile` değişkenini de tamamen kaldır; kullanılıyorsa sadece `hasRole` importunu ve `isManager` değişkenini/if bloğunu kaldır). `if (!isManager) { ...insertAdjacentHTML... }` bloğunun tamamını sil.
+
+- [ ] **Step 4: `src/pages/urunler.js`'te aynı değişikliği yap**
+
+Aynı desen: `hasRole` importu, `isManager` değişkeni ve ona bağlı `if (!isManager) { ...insertAdjacentHTML... }` bloğu kaldırılır.
+
+- [ ] **Step 5: Testi çalıştır ve build al**
+
+Run: `npm run test`
+Expected: PASS (bu değişiklikler mevcut testlerin beklediği DOM yapısını bozmuyor — `firmalar.js`/`urunler.js` testleri varsa, `isManager` notunun DOM'da olup olmadığını kontrol eden bir test yoksa etkilenmez; varsa o testi kaldır).
+
+Run: `npm run build`
+Expected: Hatasız biter.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add supabase/migrations/0012_kalite_onayi_kaldir.sql src/pages/firmalar.js src/pages/urunler.js
+git commit -m "fix: onaylanan kaydin degismezligini geri getir, firma/urun/receipt_items uzerindeki unutulmus rol kontrollerini kaldir"
+```
+
+---
+
 ## Bu Plan Tamamlandığında Doğrulanacaklar
 
 - `npm run test` ve `npm run build` yeşil.
