@@ -138,10 +138,10 @@ export async function renderMalKabulCiktisi(container) {
     try {
       // exceljs büyük bir bağımlılık — sadece butona basıldığında yüklensin.
       const { buildMalKabulWorkbook } = await import('../lib/mal-kabul-excel.js');
-      // GitHub Pages'te uygulama kök dizinde değil bir alt-yolda (`/mal-kabul-formu/`)
-      // yayında; `import.meta.env.BASE_URL` Vite'ın `base` ayarına göre doğru öneki
-      // (dev'de '/', prod'da '/mal-kabul-formu/') verir — sabit '/sablonlar/...' yolu
-      // canlıda 404 veriyordu.
+      // `import.meta.env.BASE_URL` Vite'ın `base` ayarına göre doğru öneki verir; sabit bir
+      // '/sablonlar/...' yolu, uygulama bir alt-dizinde yayınlandığında 404 veriyordu.
+      // (Özel alan adına geçilince base '/' oldu, ama BASE_URL kullanımı yine de doğru
+      // olan: yarın tekrar alt-dizine taşınırsa bu satırların değişmesi gerekmez.)
       const res = await fetch(`${import.meta.env.BASE_URL}sablonlar/mal-kabul-formu-sablonu.xlsx`);
       if (!res.ok) throw new Error(`Şablon indirilemedi (${res.status})`);
       const templateBuf = await res.arrayBuffer();

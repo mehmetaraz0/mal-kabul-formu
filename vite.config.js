@@ -1,10 +1,11 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-// GitHub Pages'te bir proje sitesi (kullanici.github.io/repo-adi/) olarak yayınlanıyor;
-// tüm asset yolları bu alt-dizine göre üretilmeli, aksi halde CSS/JS 404 verir.
+// Özel alan adı (malkabul.dornevi.com) kullanıldığı için site KÖK dizinde yayınlanıyor;
+// bu yüzden base '/'. Önceden proje sitesi (kullanici.github.io/repo-adi/) olduğundan
+// '/mal-kabul-formu/' idi. Alan adı `public/CNAME` ile GitHub Pages'e bildiriliyor.
 export default defineConfig({
-  base: '/mal-kabul-formu/',
+  base: '/',
   plugins: [
     VitePWA({
       // 'autoUpdate' DEĞİL: yeni bir deploy yayınlandığında service worker hemen skipWaiting
@@ -22,8 +23,8 @@ export default defineConfig({
         theme_color: '#1e3a5f',
         background_color: '#ffffff',
         display: 'standalone',
-        start_url: '/mal-kabul-formu/',
-        scope: '/mal-kabul-formu/',
+        start_url: '/',
+        scope: '/',
         icons: [
           { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' }
