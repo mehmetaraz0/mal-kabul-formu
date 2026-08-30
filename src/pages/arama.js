@@ -57,7 +57,7 @@ export async function renderArama(container) {
     <div class="card">
       <div style="overflow-x:auto;">
         <table class="card-table">
-          <thead><tr><th>Tarih</th><th>Firma</th><th>İrsaliye No</th><th>Durum</th><th></th></tr></thead>
+          <thead><tr><th>Tarih</th><th>Firma</th><th>Kaydeden</th><th>İrsaliye No</th><th>Durum</th><th></th></tr></thead>
           <tbody id="results-body"></tbody>
         </table>
       </div>
@@ -83,7 +83,7 @@ export async function renderArama(container) {
       lastResults = await listReceipts(currentFilters());
       const tbody = container.querySelector('#results-body');
       if (lastResults.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5">Sonuç bulunamadı.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6">Sonuç bulunamadı.</td></tr>';
         return;
       }
       tbody.innerHTML = lastResults
@@ -91,6 +91,7 @@ export async function renderArama(container) {
           (r) => `<tr>
             <td>${escapeHtml(r.receipt_date)}</td>
             <td>${escapeHtml(r.companies.name)}</td>
+            <td>${escapeHtml(r.received_profile?.full_name || '-')}</td>
             <td>${escapeHtml(r.irsaliye_no || '-')}</td>
             <td><span class="badge badge-${STATUS_BADGE_VARIANT[r.status] || 'neutral'}">${escapeHtml(STATUS_LABELS[r.status] || r.status)}</span></td>
             <td><button data-view="${escapeHtml(r.id)}">Çıktı</button></td>

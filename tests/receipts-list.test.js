@@ -89,4 +89,18 @@ describe('listReceipts', () => {
     await listReceipts({});
     expect(receiptsQuery.limit).toHaveBeenCalledWith(500);
   });
+
+  it('received_profile join ile kaydı oluşturanın adını da döner', async () => {
+    receiptsQuery.limit.mockResolvedValueOnce({
+      data: [{
+        id: 'r1', receipt_date: '2026-08-20', irsaliye_no: 'IRS-1', status: 'onaylandi',
+        companies: { name: 'TEST FIRMA' },
+        received_profile: { full_name: 'Depo Kişisi' }
+      }],
+      error: null
+    });
+    const result = await listReceipts({});
+    expect(result[0].received_profile.full_name).toBe('Depo Kişisi');
+    expect(receiptsQuery.select).toHaveBeenCalledWith(expect.stringContaining('received_profile'));
+  });
 });

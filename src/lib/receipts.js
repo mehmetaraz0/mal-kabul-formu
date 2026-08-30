@@ -79,7 +79,7 @@ export async function getReceiptDetail(receiptId) {
 export async function listReceipts({ companyId, startDate, endDate, status, productId } = {}) {
   let query = supabase
     .from('receipts')
-    .select('id, receipt_date, irsaliye_no, status, companies (name)');
+    .select('id, receipt_date, irsaliye_no, status, companies (name), received_profile:profiles!receipts_received_by_fkey (full_name)');
 
   if (companyId) query = query.eq('company_id', companyId);
   if (startDate) query = query.gte('receipt_date', startDate);
