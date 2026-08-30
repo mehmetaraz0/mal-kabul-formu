@@ -7,6 +7,7 @@ import { renderKullanicilar } from './pages/kullanicilar.js';
 import { renderUrunler } from './pages/urunler.js';
 import { renderYeniKabul } from './pages/yeni-kabul.js';
 import { renderArama } from './pages/arama.js';
+import { renderIstatistik } from './pages/istatistik.js';
 import { renderMalKabulCiktisi } from './pages/mal-kabul-ciktisi.js';
 import { escapeHtml } from './lib/html.js';
 import { registerRoute, startRouter, navigate, resetRoutes } from './router.js';
@@ -138,6 +139,7 @@ async function renderApp() {
         ${canManageCatalog ? '<button class="pill-tab" data-nav="/urunler">Ürünler</button>' : ''}
         ${canCreateReceipt ? '<button class="pill-tab" data-nav="/yeni-kabul">Yeni Mal Kabul</button>' : ''}
         <button class="pill-tab" data-nav="/arama">Kayıt Ara</button>
+        <button class="pill-tab" data-nav="/istatistik">İstatistik</button>
         ${isAdmin ? '<button class="pill-tab" data-nav="/kullanicilar">Kullanıcılar</button>' : ''}
       </nav>
       <main id="page-content" style="padding:1.25rem;"></main>
@@ -167,6 +169,7 @@ async function renderApp() {
     if (canManageCatalog) registerRoute('/urunler', renderUrunler);
     if (canCreateReceipt) registerRoute('/yeni-kabul', renderYeniKabul);
     registerRoute('/arama', renderArama);
+    registerRoute('/istatistik', renderIstatistik);
     registerRoute('/mal-kabul-ciktisi', renderMalKabulCiktisi);
     if (isAdmin) registerRoute('/kullanicilar', renderKullanicilar);
     startRouter(pageContent);
