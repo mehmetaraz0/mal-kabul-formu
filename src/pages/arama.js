@@ -4,20 +4,6 @@ import { listProducts } from '../lib/products.js';
 import { escapeHtml } from '../lib/html.js';
 import { navigate } from '../router.js';
 
-const STATUS_LABELS = {
-  taslak: 'Taslak',
-  kalite_bekliyor: 'Kalite Bekliyor',
-  onaylandi: 'Onaylandı',
-  reddedildi: 'Reddedildi'
-};
-
-const STATUS_BADGE_VARIANT = {
-  taslak: 'neutral',
-  kalite_bekliyor: 'warning',
-  onaylandi: 'success',
-  reddedildi: 'danger'
-};
-
 export async function renderArama(container) {
   const [companies, products] = await Promise.all([listCompanies(), listProducts()]);
 
@@ -35,16 +21,6 @@ export async function renderArama(container) {
         </div>
         <div class="field"><label class="field-label" for="filter-start">Başlangıç</label><input type="date" id="filter-start" /></div>
         <div class="field"><label class="field-label" for="filter-end">Bitiş</label><input type="date" id="filter-end" /></div>
-        <div class="field">
-          <label class="field-label" for="filter-status">Durum</label>
-          <select id="filter-status">
-            <option value="">Tümü</option>
-            <option value="taslak">Taslak</option>
-            <option value="kalite_bekliyor">Kalite Bekliyor</option>
-            <option value="onaylandi">Onaylandı</option>
-            <option value="reddedildi">Reddedildi</option>
-          </select>
-        </div>
         <div class="field" style="justify-content:end;">
           <button id="search-btn">Ara</button>
         </div>
@@ -57,7 +33,7 @@ export async function renderArama(container) {
     <div class="card">
       <div style="overflow-x:auto;">
         <table class="card-table">
-          <thead><tr><th>Tarih</th><th>Firma</th><th>Kaydeden</th><th>İrsaliye No</th><th>Durum</th><th></th></tr></thead>
+          <thead><tr><th>Tarih</th><th>Firma</th><th>Kaydeden</th><th>İrsaliye No</th><th></th></tr></thead>
           <tbody id="results-body"></tbody>
         </table>
       </div>
@@ -71,8 +47,7 @@ export async function renderArama(container) {
       companyId: container.querySelector('#filter-company').value || undefined,
       productId: container.querySelector('#filter-product').value || undefined,
       startDate: container.querySelector('#filter-start').value || undefined,
-      endDate: container.querySelector('#filter-end').value || undefined,
-      status: container.querySelector('#filter-status').value || undefined
+      endDate: container.querySelector('#filter-end').value || undefined
     };
   }
 
@@ -83,7 +58,7 @@ export async function renderArama(container) {
       lastResults = await listReceipts(currentFilters());
       const tbody = container.querySelector('#results-body');
       if (lastResults.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="6">Sonuç bulunamadı.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5">Sonuç bulunamadı.</td></tr>';
         return;
       }
       tbody.innerHTML = lastResults
@@ -93,7 +68,6 @@ export async function renderArama(container) {
             <td>${escapeHtml(r.companies.name)}</td>
             <td>${escapeHtml(r.received_profile?.full_name || '-')}</td>
             <td>${escapeHtml(r.irsaliye_no || '-')}</td>
-            <td><span class="badge badge-${STATUS_BADGE_VARIANT[r.status] || 'neutral'}">${escapeHtml(STATUS_LABELS[r.status] || r.status)}</span></td>
             <td><button data-view="${escapeHtml(r.id)}">Çıktı</button></td>
           </tr>`
         )
