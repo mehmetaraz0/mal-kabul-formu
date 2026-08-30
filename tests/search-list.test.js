@@ -124,3 +124,82 @@ describe('renderSearchList', () => {
     container.remove();
   });
 });
+
+describe('renderSearchList — dokunmatik seçim', () => {
+  function setup() {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    const selected = [];
+    renderSearchList(container, {
+      items: [{ id: 1, name: 'DANA KIYMA' }, { id: 2, name: 'KUZU PIRZOLA' }],
+      getLabel: (i) => i.name,
+      getKey: (i) => i.id,
+      onSelect: (item) => selected.push(item),
+      placeholder: 'Ürün ara...'
+    });
+    return { container, selected };
+  }
+
+  function pointer(li, type, x, y, cancelable = true) {
+    const evt = new PointerEvent(type, { bubbles: true, cancelable, clientX: x, clientY: y });
+    li.dispatchEvent(evt);
+    return evt;
+  }
+
+  // Kök neden: seçim `click`'te yapılırsa, dokunmatik cihazda sıra
+  // touchstart → touchend → blur → (sanal klavye kapanır, sayfa yeniden akar) → click olduğu
+  // için `click` parmağın bıraktığı KOORDİNATA kaymış başka bir elemana gider. Seçim,
+  // düzen değişmeden önce gelen `pointerup`'ta kesinleşmeli.
+  it('yerinde dokunma (pointerdown + pointerup) seçim yapar', () => {
+    const { container, selected } = setup();
+    const li = container.querySelector('li[data-key="1"]');
+
+    pointer(li, 'pointerdown', 100, 200);
+    pointer(li, 'pointerup', 100, 202);
+
+    expect(selected).toHaveLength(1);
+    expect(selected[0].name).toBe('DANA KIYMA');
+  });
+
+  // 65 ürünlük dropdown kaydırılabilir (max-height:260px). Kaydırma hareketi seçim SAYILMAMALI.
+  it('kaydırma hareketi (parmak kayarak kalkarsa) seçim yapmaz', () => {
+    const { container, selected } = setup();
+    const li = container.querySelector('li[data-key="1"]');
+
+    pointer(li, 'pointerdown', 100, 200);
+    pointer(li, 'pointerup', 100, 260);
+
+    expect(selected).toHaveLength(0);
+  });
+
+  it('pointerup varsayılanı engellenir (takip eden hayalet click zincirini kırar)', () => {
+    const { container } = setup();
+    const li = container.querySelector('li[data-key="1"]');
+
+    pointer(li, 'pointerdown', 100, 200);
+    const up = pointer(li, 'pointerup', 100, 200);
+
+    expect(up.defaultPrevented).toBe(true);
+  });
+
+  it('pointer ile seçimden sonra gelen click ikinci kez seçim yapmaz', () => {
+    const { container, selected } = setup();
+    const li = container.querySelector('li[data-key="1"]');
+
+    pointer(li, 'pointerdown', 100, 200);
+    pointer(li, 'pointerup', 100, 200);
+    li.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(selected).toHaveLength(1);
+  });
+
+  it('pointer olayı olmayan ortamda click hâlâ seçim yapar (geri uyumluluk)', () => {
+    const { container, selected } = setup();
+    const li = container.querySelector('li[data-key="2"]');
+
+    li.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(selected).toHaveLength(1);
+    expect(selected[0].name).toBe('KUZU PIRZOLA');
+  });
+});

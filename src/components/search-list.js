@@ -34,6 +34,56 @@ export function renderSearchList(container, { items, getLabel, getKey, onSelect,
     list.style.display = 'none';
   }
 
+  // Seçim `click` yerine `pointerup`'ta kesinleşiyor. Dokunmatik cihazda bir tap şu sırayla
+  // ilerler: pointerdown → pointerup → input blur → SANAL KLAVYE KAPANIR (sayfa yeniden akar,
+  // içerik yukarı kayar) → mousedown → click. Tarayıcı `click`'i parmağın bıraktığı KOORDİNATA
+  // gönderdiği için, klavye kapandıktan sonra o koordinatta artık listedeki öğe değil altındaki
+  // form hücresi bulunur: seçim hiç olmaz, arkadaki alan tıklanır ve o nokta container dışında
+  // kaldığından `handleOutsideClick` dropdown'ı kapatır. `pointerup` bu düzen değişikliğinden
+  // ÖNCE gelir.
+  //
+  // Neden `pointerdown` değil: dropdown 260px'e sığmayan uzun bir liste (60+ ürün) ve
+  // kaydırılabilir. pointerdown'da seçmek, kullanıcı listeyi kaydırmak için parmağını
+  // bastığı anda o öğeyi seçerdi. Bu yüzden pointerdown yalnızca başlangıç noktasını
+  // kaydediyor; seçim, parmak kaymadan kalktıysa (DRAG_TOLERANCE_PX) pointerup'ta yapılıyor.
+  const DRAG_TOLERANCE_PX = 10;
+
+  function bindItemSelection(source) {
+    list.querySelectorAll('li[data-key]').forEach((li) => {
+      let start = null;
+      let handled = false;
+
+      const commit = (e) => {
+        // pointer yolu seçimi yaptıysa, hemen ardından gelen uyumluluk click'ini yut.
+        if (handled) return;
+        handled = true;
+        if (e.cancelable) e.preventDefault();
+        const item = source.find((i) => String(getKey(i)) === li.dataset.key);
+        input.value = '';
+        closeDropdown();
+        // Odağı input'ta tutuyoruz: odak kaybı sanal klavyeyi kapatır, bu da sayfayı yeniden
+        // akıtıp takip eden click'i yanlış elemana düşürür (yukarıdaki kök neden).
+        input.focus();
+        onSelect(item);
+      };
+
+      li.addEventListener('pointerdown', (e) => {
+        start = { x: e.clientX, y: e.clientY };
+      });
+
+      li.addEventListener('pointerup', (e) => {
+        if (!start) return;
+        const moved = Math.hypot(e.clientX - start.x, e.clientY - start.y);
+        start = null;
+        if (moved > DRAG_TOLERANCE_PX) return; // kaydırma hareketi, seçim değil
+        commit(e);
+      });
+
+      // Pointer olaylarını desteklemeyen ortamlar için geri düşüş.
+      li.addEventListener('click', commit);
+    });
+  }
+
   function renderList(filtered) {
     if (filtered.length === 0) {
       list.innerHTML = '<li style="padding:0.6rem 0.8rem;color:var(--color-label, #666);">Sonuç bulunamadı</li>';
@@ -41,14 +91,7 @@ export function renderSearchList(container, { items, getLabel, getKey, onSelect,
       list.innerHTML = filtered
         .map((item) => `<li data-key="${escapeHtml(getKey(item))}" style="padding:0.6rem 0.8rem;border-bottom:1px solid var(--color-border);cursor:pointer;">${escapeHtml(getLabel(item))}</li>`)
         .join('');
-      list.querySelectorAll('li[data-key]').forEach((li) => {
-        li.addEventListener('click', () => {
-          const item = filtered.find((i) => String(getKey(i)) === li.dataset.key);
-          input.value = '';
-          closeDropdown();
-          onSelect(item);
-        });
-      });
+      bindItemSelection(filtered);
     }
     list.style.display = 'block';
   }
@@ -59,14 +102,7 @@ export function renderSearchList(container, { items, getLabel, getKey, onSelect,
   list.innerHTML = items
     .map((item) => `<li data-key="${escapeHtml(getKey(item))}" style="padding:0.6rem 0.8rem;border-bottom:1px solid var(--color-border);cursor:pointer;">${escapeHtml(getLabel(item))}</li>`)
     .join('');
-  list.querySelectorAll('li[data-key]').forEach((li) => {
-    li.addEventListener('click', () => {
-      const item = items.find((i) => String(getKey(i)) === li.dataset.key);
-      input.value = '';
-      closeDropdown();
-      onSelect(item);
-    });
-  });
+  bindItemSelection(items);
 
   input.addEventListener('input', () => {
     const query = input.value.trim();
