@@ -1,7 +1,9 @@
 import './style-print.css';
 import { getCurrentProfile, onAuthStateChange, signOut } from './lib/auth.js';
+import { hasAnyRole } from './lib/role.js';
 import { renderLogin } from './pages/login.js';
 import { renderFirmalar } from './pages/firmalar.js';
+import { renderKullanicilar } from './pages/kullanicilar.js';
 import { renderUrunler } from './pages/urunler.js';
 import { renderYeniKabul } from './pages/yeni-kabul.js';
 import { renderArama } from './pages/arama.js';
@@ -118,6 +120,10 @@ async function renderApp() {
       renderOfflineBanner(app);
       return;
     }
+    const canManageCatalog = hasAnyRole(profile, ['admin', 'depo_yonetici']);
+    const canCreateReceipt = hasAnyRole(profile, ['depo_yonetici']);
+    const isAdmin = hasAnyRole(profile, ['admin']);
+
     app.innerHTML = `
       <header class="app-topbar">
         <span class="app-topbar-title">Mal Kabul Formu</span>
@@ -128,10 +134,11 @@ async function renderApp() {
       </header>
       <nav class="app-subnav">
         <button class="pill-tab" data-nav="/">Ana Sayfa</button>
-        <button class="pill-tab" data-nav="/firmalar">Firmalar</button>
-        <button class="pill-tab" data-nav="/urunler">Ürünler</button>
-        <button class="pill-tab" data-nav="/yeni-kabul">Yeni Mal Kabul</button>
+        ${canManageCatalog ? '<button class="pill-tab" data-nav="/firmalar">Firmalar</button>' : ''}
+        ${canManageCatalog ? '<button class="pill-tab" data-nav="/urunler">Ürünler</button>' : ''}
+        ${canCreateReceipt ? '<button class="pill-tab" data-nav="/yeni-kabul">Yeni Mal Kabul</button>' : ''}
         <button class="pill-tab" data-nav="/arama">Kayıt Ara</button>
+        ${isAdmin ? '<button class="pill-tab" data-nav="/kullanicilar">Kullanıcılar</button>' : ''}
       </nav>
       <main id="page-content" style="padding:1.25rem;"></main>
     `;
@@ -149,14 +156,18 @@ async function renderApp() {
 
     const pageContent = app.querySelector('#page-content');
     registerRoute('/', (c) => {
-      c.innerHTML = '<p><button class="btn-accent" data-nav="/yeni-kabul">+ Yeni Mal Kabul</button></p>';
-      c.querySelector('[data-nav]').addEventListener('click', () => navigate('/yeni-kabul'));
+      c.innerHTML = canCreateReceipt
+        ? '<p><button class="btn-accent" data-nav="/yeni-kabul">+ Yeni Mal Kabul</button></p>'
+        : '<p>Hoş geldiniz.</p>';
+      const btn = c.querySelector('[data-nav]');
+      if (btn) btn.addEventListener('click', () => navigate('/yeni-kabul'));
     });
-    registerRoute('/firmalar', renderFirmalar);
-    registerRoute('/urunler', renderUrunler);
-    registerRoute('/yeni-kabul', renderYeniKabul);
+    if (canManageCatalog) registerRoute('/firmalar', renderFirmalar);
+    if (canManageCatalog) registerRoute('/urunler', renderUrunler);
+    if (canCreateReceipt) registerRoute('/yeni-kabul', renderYeniKabul);
     registerRoute('/arama', renderArama);
     registerRoute('/mal-kabul-ciktisi', renderMalKabulCiktisi);
+    if (isAdmin) registerRoute('/kullanicilar', renderKullanicilar);
     startRouter(pageContent);
     updateActiveNav();
   } catch (err) {
