@@ -33,16 +33,19 @@ function selectFirstFromSearchList(container, pickerId) {
   li.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 }
 
-// Ürün seçimi popup değil her zaman görünen bir tablo (kullanıcı isteği) — Firma seçiminden
-// (search-list.js tabanlı popup) farklı bir DOM yapısı, bu yüzden ayrı bir yardımcı gerekiyor.
-function selectFirstFromUrunTablo(container) {
-  const btn = container.querySelector('#urun-picker [data-add]');
-  btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+// Ürün seçimi artık kart-içi bir popup (search-list.js) — sayfa açılışında zaten var olan İLK
+// kartın (index 0) kendi arama kutusu kullanılıyor.
+function selectFirstFromUrunKarti(container, cardIndex = 0) {
+  const input = container.querySelector(`.urun-arama[data-index="${cardIndex}"] .search-input`);
+  input.value = '';
+  input.dispatchEvent(new Event('input', { bubbles: true }));
+  const li = container.querySelector(`.urun-arama[data-index="${cardIndex}"] .search-results li`);
+  li.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 }
 
 function addFirstProductRow(container) {
-  selectFirstFromUrunTablo(container);
-  const qtyInput = container.querySelector('#items-body input[data-field="quantity"][data-index="0"]');
+  selectFirstFromUrunKarti(container, 0);
+  const qtyInput = container.querySelector('#urun-kartlari input[data-field="quantity"][data-index="0"]');
   qtyInput.value = '5';
   qtyInput.dispatchEvent(new Event('input', { bubbles: true }));
 }
@@ -74,16 +77,18 @@ describe('yeni-kabul save() - yerel doğrulama vs. çevrimdışı kuyruğa yazma
     Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
   });
 
-  it('firma seçili + SIFIR ürün satırı + çevrimdışıyken: kuyruğa YAZMAZ, doğrudan yerel hata gösterir', async () => {
+  it('firma seçili + ürün seçilmemiş varsayılan kart + çevrimdışıyken: kuyruğa YAZMAZ, doğrudan yerel hata gösterir', async () => {
     selectFirstFromSearchList(container, 'firma-picker');
-    // items eklenmedi -> state.items.length === 0
+    // Sayfa açılışında zaten var olan tek kart (index 0) ürün seçilmeden bırakılıyor. Kart tabanlı
+    // tasarımda state.items her zaman en az bir eleman içerir (emptyItem()) — bu yüzden burada
+    // artık "0 satır" değil, "seçilmemiş ürün" yerel doğrulaması devreye giriyor.
 
     Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
     container.querySelector('#save-draft-btn').click();
     await flushAsync();
 
     const msg = container.querySelector('#kabul-msg');
-    expect(msg.textContent).toBe('Hata: En az bir ürün satırı gerekli');
+    expect(msg.textContent).toContain('ürün seçilmeli');
     expect(msg.style.color).toBe('rgb(176, 0, 32)'); // #b00020 kırmızı, turuncu (offline) DEĞİL
     // RPC'ye hiç gidilmediği ve dolayısıyla enqueueReceipt'in de hiç çağrılmadığı — bu, ana
     // regresyonun kanıtı: eskiden bu senaryoda createReceiptWithItems'ın YEREL throw'u
@@ -145,7 +150,7 @@ describe('yeni-kabul save() - yerel doğrulama vs. çevrimdışı kuyruğa yazma
 
   it('regresyon: miktar<=0 varken (mevcut kontrol) hâlâ kuyruğa yazmadan hata gösterir', async () => {
     selectFirstFromSearchList(container, 'firma-picker');
-    selectFirstFromUrunTablo(container);
+    selectFirstFromUrunKarti(container, 0);
     // quantity varsayılan olarak 0 bırakılıyor (addFirstProductRow kullanılmadı)
 
     Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
@@ -173,7 +178,7 @@ describe('yeni-kabul save() - yerel doğrulama vs. çevrimdışı kuyruğa yazma
   });
 });
 
-describe('yeni-kabul ürün tablosu — popup değil her zaman görünen tablo', () => {
+describe('yeni-kabul ürün kartları', () => {
   let container;
 
   beforeEach(async () => {
@@ -194,35 +199,58 @@ describe('yeni-kabul ürün tablosu — popup değil her zaman görünen tablo',
     container.remove();
   });
 
-  it('hiçbir şey yazılmadan tüm ürünler tabloda görünür (popup gibi gizli değil)', () => {
-    const rows = container.querySelectorAll('#urun-picker tbody tr');
-    expect(rows).toHaveLength(2);
-    expect(container.querySelector('#urun-picker').textContent).toContain('DANA KUŞBAŞI');
-    expect(container.querySelector('#urun-picker').textContent).toContain('TAVUK BUT');
+  it('sayfa açıldığında bir boş kart hazır bekler', () => {
+    const cards = container.querySelectorAll('#urun-kartlari > .card');
+    expect(cards).toHaveLength(1);
   });
 
-  it('filtre kutusuna yazınca tablo eşleşmeyen ürünleri gizler', () => {
-    const filtre = container.querySelector('#urun-tablo-filtre');
-    filtre.value = 'tavuk';
-    filtre.dispatchEvent(new Event('input', { bubbles: true }));
-
-    const body = container.querySelector('#urun-picker tbody');
-    expect(body.textContent).toContain('TAVUK BUT');
-    expect(body.textContent).not.toContain('DANA KUŞBAŞI');
+  it('"+ Ürün Ekle" yeni bir boş kart daha ekler', () => {
+    container.querySelector('#urun-ekle-btn').click();
+    const cards = container.querySelectorAll('#urun-kartlari > .card');
+    expect(cards).toHaveLength(2);
   });
 
-  it('bir satırdaki "Ekle" butonuna tıklanınca o ürün satır tablosuna eklenir', () => {
-    const btn = container.querySelectorAll('#urun-picker [data-add]')[1]; // TAVUK BUT
-    btn.click();
+  it('bir karttaki arama kutusundan ürün seçilince o kartın Birim alanı otomatik dolar', () => {
+    const input = container.querySelector('.urun-arama[data-index="0"] .search-input');
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    const li = container.querySelector('.urun-arama[data-index="0"] .search-results li');
+    li.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
-    const items = container.querySelectorAll('#items-body tr');
-    expect(items).toHaveLength(1);
-    expect(items[0].textContent).toContain('TAVUK BUT');
+    const birimInput = container.querySelectorAll('#urun-kartlari > .card')[0].querySelector('input[disabled]');
+    expect(birimInput.value).toBe('kg');
   });
 
-  it('Firma seçimi hâlâ popup olarak çalışır (bu değişiklikten etkilenmedi)', () => {
-    const list = container.querySelector('#firma-picker .search-results');
-    expect(list.style.display).toBe('none');
-    expect(container.querySelector('#firma-picker tbody')).toBeNull();
+  it('Uygun butonuna basınca o buton vurgulu, Uygunsuz nötr olur; hiçbiri basılmadan önce ikisi de nötrdür', () => {
+    const uygunBtn = container.querySelector('[data-uygunluk="uygun"][data-index="0"]');
+    const uygunsuzBtn = container.querySelector('[data-uygunluk="uygun_degil"][data-index="0"]');
+    expect(uygunBtn.className).not.toContain('btn-success');
+    expect(uygunsuzBtn.className).not.toContain('btn-danger');
+
+    uygunBtn.click();
+    expect(uygunBtn.className).toContain('btn-success');
+    expect(uygunsuzBtn.className).not.toContain('btn-danger');
+  });
+
+  it('"Kartı Sil" o kartı kaldırır', () => {
+    container.querySelector('#urun-ekle-btn').click(); // artık 2 kart var
+    expect(container.querySelectorAll('#urun-kartlari > .card')).toHaveLength(2);
+
+    container.querySelector('[data-remove-card="0"]').click();
+    expect(container.querySelectorAll('#urun-kartlari > .card')).toHaveLength(1);
+  });
+
+  it('ürün seçilmemiş bir kartla "Kaydet"e basılırsa yerel hata gösterir, RPC\'ye gitmez', async () => {
+    selectFirstFromSearchList(container, 'firma-picker');
+    // İlk kart (index 0) ürün seçilmeden bırakılıyor.
+    const tarihInput = container.querySelector('#kabul-tarih');
+    tarihInput.value = tarihInput.value || new Date().toISOString().slice(0, 10);
+
+    container.querySelector('#save-draft-btn').click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const msg = container.querySelector('#kabul-msg');
+    expect(msg.textContent).toContain('ürün seçilmeli');
+    expect(createReceiptWithItems).not.toHaveBeenCalled();
   });
 });

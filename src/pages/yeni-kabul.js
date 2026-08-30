@@ -1,6 +1,6 @@
 import { listCompanies } from '../lib/companies.js';
 import { listProducts } from '../lib/products.js';
-import { renderSearchList, filterItems } from '../components/search-list.js';
+import { renderSearchList } from '../components/search-list.js';
 import { createReceiptWithItems } from '../lib/receipts.js';
 import { getCurrentProfile } from '../lib/auth.js';
 import { escapeHtml } from '../lib/html.js';
@@ -13,7 +13,14 @@ export async function renderYeniKabul(container) {
 
   const [companies, products] = await Promise.all([listCompanies(), listProducts()]);
 
-  const state = { companyId: null, items: [] };
+  function emptyItem() {
+    return {
+      productId: null, code: '', name: '', unit: '', marka: '', lotNo: '', skt: '',
+      quantity: 0, urunSicakligi: '', yariOmurGecti: false, uygunluk: 'beklemede', note: ''
+    };
+  }
+
+  const state = { companyId: null, items: [emptyItem()] };
 
   container.innerHTML = `
     <div class="card">
@@ -42,19 +49,11 @@ export async function renderYeniKabul(container) {
     </div>
 
     <div class="card">
-      <div class="card-header">
+      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
         <div class="card-header-title">📦 Ürünler</div>
+        <button type="button" id="urun-ekle-btn" class="btn-accent">+ Ürün Ekle</button>
       </div>
-      <div id="urun-picker" style="margin-bottom:1rem;"></div>
-
-      <div style="overflow-x:auto;">
-        <table id="items-table" class="card-table">
-          <thead>
-            <tr><th>Ürün</th><th>Marka</th><th>Lot No</th><th>SKT</th><th>Miktar</th><th>Birim</th><th>Ürün Sıcaklığı</th><th>Yarı Ömür Geçti mi</th><th>Uygunluk</th><th>Not</th><th></th></tr>
-          </thead>
-          <tbody id="items-body"></tbody>
-        </table>
-      </div>
+      <div id="urun-kartlari"></div>
     </div>
 
     <div style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
@@ -80,110 +79,96 @@ export async function renderYeniKabul(container) {
     aracHijyenBox.dataset.value = e.target.value;
   });
 
-  function renderItemsBody() {
-    const tbody = container.querySelector('#items-body');
-    tbody.innerHTML = state.items
+  function renderUrunKartlari() {
+    const wrap = container.querySelector('#urun-kartlari');
+    wrap.innerHTML = state.items
       .map(
         (item, i) => `
-      <tr>
-        <td>${escapeHtml(item.code)} — ${escapeHtml(item.name)}</td>
-        <td><input type="text" data-field="marka" data-index="${i}" value="${escapeHtml(item.marka)}" style="width:100px;" placeholder="Marka" /></td>
-        <td><input type="text" data-field="lotNo" data-index="${i}" value="${escapeHtml(item.lotNo)}" /></td>
-        <td><input type="date" data-field="skt" data-index="${i}" value="${escapeHtml(item.skt)}" /></td>
-        <td><input type="number" min="0" step="0.01" data-field="quantity" data-index="${i}" value="${escapeHtml(item.quantity)}" style="width:80px;" /></td>
-        <td>${escapeHtml(item.unit)}</td>
-        <td><input type="number" step="0.1" data-field="urunSicakligi" data-index="${i}" value="${escapeHtml(item.urunSicakligi)}" style="width:90px;" /></td>
-        <td><input type="checkbox" data-field="yariOmurGecti" data-index="${i}" ${item.yariOmurGecti ? 'checked' : ''} /></td>
-        <td>
-          <select data-field="uygunluk" data-index="${i}">
-            <option value="beklemede" ${item.uygunluk === 'beklemede' ? 'selected' : ''}>Beklemede</option>
-            <option value="uygun" ${item.uygunluk === 'uygun' ? 'selected' : ''}>Uygun</option>
-            <option value="uygun_degil" ${item.uygunluk === 'uygun_degil' ? 'selected' : ''}>Uygun Değil</option>
-          </select>
-        </td>
-        <td><input type="text" data-field="note" data-index="${i}" value="${escapeHtml(item.note)}" style="width:120px;" placeholder="Not" /></td>
-        <td><button data-remove="${i}">Sil</button></td>
-      </tr>`
+      <div class="card" style="margin-bottom:1rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;">
+          <strong>${item.productId ? escapeHtml(item.code) + ' — ' + escapeHtml(item.name) : 'Ürün ' + (i + 1)}</strong>
+          <button type="button" data-remove-card="${i}" class="btn-ghost">Kartı Sil</button>
+        </div>
+        <div class="field">
+          <label class="field-label">Ürün Adı</label>
+          <div class="urun-arama" data-index="${i}"></div>
+        </div>
+        <div class="field-grid">
+          <div class="field"><label class="field-label">Miktar</label><input type="number" min="0" step="0.01" data-field="quantity" data-index="${i}" value="${escapeHtml(item.quantity)}" /></div>
+          <div class="field"><label class="field-label">Birim</label><input type="text" value="${escapeHtml(item.unit || '-')}" disabled /></div>
+          <div class="field"><label class="field-label">SKT</label><input type="date" data-field="skt" data-index="${i}" value="${escapeHtml(item.skt)}" /></div>
+          <div class="field"><label class="field-label">Sıcaklık (°C)</label><input type="number" step="0.1" data-field="urunSicakligi" data-index="${i}" value="${escapeHtml(item.urunSicakligi)}" /></div>
+          <div class="field"><label class="field-label">Seri/Lot No</label><input type="text" data-field="lotNo" data-index="${i}" value="${escapeHtml(item.lotNo)}" /></div>
+          <div class="field"><label class="field-label">Marka</label><input type="text" data-field="marka" data-index="${i}" value="${escapeHtml(item.marka)}" placeholder="Opsiyonel" /></div>
+        </div>
+        <div class="field">
+          <label class="field-label" style="flex-direction:row;align-items:center;gap:0.4rem;">
+            <input type="checkbox" data-field="yariOmurGecti" data-index="${i}" ${item.yariOmurGecti ? 'checked' : ''} /> Yarı Ömrünü Geçti mi
+          </label>
+        </div>
+        <div class="field">
+          <label class="field-label">Uygunluk</label>
+          <div style="display:flex;gap:0.5rem;">
+            <button type="button" data-uygunluk="uygun" data-index="${i}" class="${item.uygunluk === 'uygun' ? 'btn-success' : 'btn-ghost'}" style="flex:1;">✓ Uygun</button>
+            <button type="button" data-uygunluk="uygun_degil" data-index="${i}" class="${item.uygunluk === 'uygun_degil' ? 'btn-danger' : 'btn-ghost'}" style="flex:1;">✗ Uygunsuz</button>
+          </div>
+        </div>
+        <div class="field"><label class="field-label">Not</label><input type="text" data-field="note" data-index="${i}" value="${escapeHtml(item.note)}" /></div>
+      </div>`
       )
       .join('');
 
-    tbody.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+    state.items.forEach((item, i) => {
+      renderSearchList(wrap.querySelector(`.urun-arama[data-index="${i}"]`), {
+        items: products,
+        getLabel: (p) => `[${p.category}] ${p.code} — ${p.name} (${p.unit})`,
+        getKey: (p) => p.id,
+        placeholder: 'Ürün ara...',
+        onSelect: (p) => {
+          state.items[i] = { ...state.items[i], productId: p.id, code: p.code, name: p.name, unit: p.unit };
+          renderUrunKartlari();
+        }
+      });
+    });
+
+    wrap.querySelectorAll('input[type="checkbox"]').forEach((input) => {
       input.addEventListener('change', () => {
         const idx = Number(input.dataset.index);
-        const field = input.dataset.field;
-        state.items[idx][field] = input.checked;
+        state.items[idx][input.dataset.field] = input.checked;
       });
     });
-    tbody.querySelectorAll('select[data-field="uygunluk"]').forEach((select) => {
-      select.addEventListener('change', () => {
-        const idx = Number(select.dataset.index);
-        state.items[idx].uygunluk = select.value;
-      });
-    });
-    tbody.querySelectorAll('input:not([type="checkbox"])').forEach((input) => {
+    wrap.querySelectorAll('input:not([type="checkbox"])').forEach((input) => {
+      if (!input.dataset.field) return; // Birim alanı: disabled, salt-okunur, state'e yazılmıyor
       input.addEventListener('input', () => {
         const idx = Number(input.dataset.index);
         const field = input.dataset.field;
         state.items[idx][field] = field === 'quantity' ? Number(input.value) : input.value;
       });
     });
-    tbody.querySelectorAll('[data-remove]').forEach((btn) => {
+    wrap.querySelectorAll('[data-uygunluk]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        state.items.splice(Number(btn.dataset.remove), 1);
-        renderItemsBody();
+        const idx = Number(btn.dataset.index);
+        state.items[idx].uygunluk = btn.dataset.uygunluk;
+        wrap.querySelectorAll(`[data-uygunluk][data-index="${idx}"]`).forEach((b) => {
+          const isActive = b.dataset.uygunluk === state.items[idx].uygunluk;
+          b.className = isActive ? (b.dataset.uygunluk === 'uygun' ? 'btn-success' : 'btn-danger') : 'btn-ghost';
+        });
+      });
+    });
+    wrap.querySelectorAll('[data-remove-card]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        state.items.splice(Number(btn.dataset.removeCard), 1);
+        renderUrunKartlari();
       });
     });
   }
 
-  // Ürün seçimi, Firma'nın aksine popup değil HER ZAMAN görünen bir tablo — kullanıcı isteği
-  // (depoda çoğunlukla yazmadan göz gezdirerek ürün bulmak daha hızlı). Firma seçimi ve
-  // Firmalar/Ürünler yönetim sayfalarındaki arama kutuları bilerek popup olarak kalıyor.
-  const urunPicker = container.querySelector('#urun-picker');
-  urunPicker.innerHTML = `
-    <input type="text" id="urun-tablo-filtre" placeholder="Ürün ara (kod veya isim)..." style="margin-bottom:0.5rem;width:100%;" />
-    <div style="overflow-x:auto;max-height:280px;overflow-y:auto;">
-      <table class="card-table">
-        <thead><tr><th>Kod</th><th>Ürün Adı</th><th>Birim</th><th></th></tr></thead>
-        <tbody id="urun-tablo-body"></tbody>
-      </table>
-    </div>
-  `;
-  const urunFiltre = urunPicker.querySelector('#urun-tablo-filtre');
-  const urunTabloBody = urunPicker.querySelector('#urun-tablo-body');
-
-  function addUrun(p) {
-    state.items.push({ productId: p.id, code: p.code, name: p.name, unit: p.unit, marka: '', lotNo: '', skt: '', quantity: 0, urunSicakligi: '', yariOmurGecti: false, uygunluk: 'beklemede', note: '' });
-    renderItemsBody();
-  }
-
-  function renderUrunTablo(list) {
-    if (list.length === 0) {
-      urunTabloBody.innerHTML = '<tr><td colspan="4">Sonuç bulunamadı.</td></tr>';
-      return;
-    }
-    urunTabloBody.innerHTML = list
-      .map(
-        (p) => `
-      <tr>
-        <td>${escapeHtml(p.code)}</td>
-        <td>${escapeHtml(p.name)}</td>
-        <td>${escapeHtml(p.unit)}</td>
-        <td><button data-add="${escapeHtml(p.id)}">Ekle</button></td>
-      </tr>`
-      )
-      .join('');
-    urunTabloBody.querySelectorAll('[data-add]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const product = list.find((p) => String(p.id) === btn.dataset.add);
-        addUrun(product);
-      });
-    });
-  }
-
-  renderUrunTablo(products);
-  urunFiltre.addEventListener('input', () => {
-    renderUrunTablo(filterItems(products, urunFiltre.value, (p) => `${p.code} ${p.name}`));
+  container.querySelector('#urun-ekle-btn').addEventListener('click', () => {
+    state.items.push(emptyItem());
+    renderUrunKartlari();
   });
+
+  renderUrunKartlari();
 
   async function save(sendToQuality) {
     const msg = container.querySelector('#kabul-msg');
@@ -212,6 +197,11 @@ export async function renderYeniKabul(container) {
     if (state.items.length === 0) {
       msg.style.color = '#b00020';
       msg.textContent = 'Hata: En az bir ürün satırı gerekli';
+      return;
+    }
+    if (state.items.some((item) => !item.productId)) {
+      msg.style.color = '#b00020';
+      msg.textContent = 'Hata: Tüm kartlarda bir ürün seçilmeli (boş kartı silin veya ürün seçin)';
       return;
     }
     if (state.items.some((item) => !(item.quantity > 0))) {
@@ -281,10 +271,10 @@ export async function renderYeniKabul(container) {
         msg.style.color = '#a15c00';
         msg.textContent = 'Çevrimdışısınız — kayıt cihazda bekletildi, bağlantı gelince otomatik gönderilecek.';
       }
-      state.items = [];
+      state.items = [emptyItem()];
       state.companyId = null;
       container.querySelector('#firma-selected').textContent = '';
-      renderItemsBody();
+      renderUrunKartlari();
     } catch (err) {
       msg.style.color = '#b00020';
       msg.textContent = 'Hata: ' + err.message;
