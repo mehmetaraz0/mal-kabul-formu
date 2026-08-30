@@ -124,19 +124,16 @@ describe('buildMalKabulWorkbook', () => {
   it('şablonun başlık/lejant metnini ve birleştirilmiş hücrelerini her sayfada korur', async () => {
     const items = Array.from({ length: 14 }, (_, i) => ornekOge({ lot_no: `LOT-${i}` }));
     const wb = await buildMalKabulWorkbook([{ receipt: ornekReceipt(), items }], await sablon());
-    // Sayfa 1: 13 dolu veri satırı (tam dolu), Sayfa 2: 1 dolu veri satırı (14. öğe taştı) —
-    // her dolu satır için İmzalar (O:P) ayrıca birleştirildiğinden şablondaki 21 sabit
-    // birleştirmeye eklenen dolu-satır sayısı kadar merge daha bekleniyor.
-    const doluSatirSayisi = [13, 1];
-    wb.worksheets.forEach((ws, i) => {
+    // Veri satirlarinda artik ek birlestirme yapilmiyor (iki imza kutusu ayri kalmali),
+    // bu yuzden her sayfada yalnizca sablonun kendi 21 birlestirmesi bulunur.
+    wb.worksheets.forEach((ws) => {
       expect(ws.getCell('C1').value).toBe('MAL KABUL FORMU');
       expect(ws.getCell('A3').value).toBe('Tarih');
       expect(ws.getCell('M3').value).toBe('MKK');
       expect(ws.getCell('A29').value).toBe('Doküman No:F.22');
       expect(String(ws.getCell('A19').value)).toContain('UYGUN');
-      // Şablondaki 21 birleştirilmiş hücre aralığı + her dolu satırın İmzalar (O:P)
-      // birleştirmesi korunmalı.
-      expect(Object.keys(ws._merges)).toHaveLength(21 + doluSatirSayisi[i]);
+      // Yalnızca şablondaki 21 birleştirilmiş hücre aralığı korunmalı.
+      expect(Object.keys(ws._merges)).toHaveLength(21);
       // Başlık dolgusu ve veri hücresi kenarlığı şablondan gelmeli.
       expect(ws.getCell('A3').fill.fgColor.argb).toBe('FFD6E5F3');
       expect(ws.getCell('A5').border.left.style).toBe('thin');
@@ -275,21 +272,37 @@ describe('buildMalKabulWorkbook', () => {
     expect(tekrar.worksheets[1].pageSetup.orientation).toBe('landscape');
   });
 
-  it('İmzalar hücresine (O:P birleştirilmiş) kaydı oluşturanın adını yazar', async () => {
+  // Sablonda "Imzalar" basligi O3:P4 olarak birlesik ama VERI satirlarinda iki ayri kutu var:
+  // O = teslim alan (sistemden otomatik), P = onaylayan (ciktida elle imzalanir/yazilir).
+  // Kod her satirda O:P'yi birlestirdigi icin tek isim iki kutuyu birden dolduruyordu.
+  it('teslim alan adını yalnızca O sütununa yazar, onay kutusunu (P) boş bırakır', async () => {
     const wb = await buildMalKabulWorkbook(
       [{ receipt: ornekReceipt({ receivedByName: 'Depo Kişisi' }), items: [ornekOge()] }],
       await sablon()
     );
     const sheet = wb.worksheets[0];
     expect(sheet.getCell('O5').value).toBe('Depo Kişisi');
-    expect(sheet.model.merges).toContain('O5:P5');
+    expect(sheet.getCell('P5').value).toBeNull();
   });
 
-  it('receivedByName yoksa İmzalar hücresine "-" yazar', async () => {
+  it('veri satırlarında O:P birleştirmesi YAPMAZ (iki imza kutusu ayrı kalır)', async () => {
+    const wb = await buildMalKabulWorkbook(
+      [{ receipt: ornekReceipt(), items: [ornekOge(), ornekOge()] }],
+      await sablon()
+    );
+    const merges = wb.worksheets[0].model.merges;
+    expect(merges).not.toContain('O5:P5');
+    expect(merges).not.toContain('O6:P6');
+    // Sablonun kendi baslik birlestirmesi korunmali.
+    expect(merges).toContain('O3:P4');
+  });
+
+  it('receivedByName yoksa teslim alan kutusuna "-" yazar, onay kutusu yine boş kalır', async () => {
     const wb = await buildMalKabulWorkbook(
       [{ receipt: ornekReceipt({ receivedByName: undefined }), items: [ornekOge()] }],
       await sablon()
     );
     expect(wb.worksheets[0].getCell('O5').value).toBe('-');
+    expect(wb.worksheets[0].getCell('P5').value).toBeNull();
   });
 });

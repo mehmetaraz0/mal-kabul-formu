@@ -94,9 +94,12 @@ export async function buildMalKabulWorkbook(receiptsWithItems, templateArrayBuff
       // Açıklama sütunu artık Not değil marka gösteriyor (kullanıcı isteği) — PDF/print
       // çıktısıyla aynı davranış.
       sheet.getCell(`N${row}`).value = item.marka || '-';
-      // İmzalar (O:P) artık ıslak imza için boş bırakılmıyor — kaydı oluşturanın adı tek
-      // birleştirilmiş hücreye yazılıyor (kullanıcı isteği, fiziksel imza alanı kalkıyor).
-      sheet.mergeCells(`O${row}:P${row}`);
+      // "İmzalar" başlığı şablonda O3:P4 olarak birleşiktir, ama VERİ satırlarında altında
+      // iki ayrı kutu vardır: O = teslim alan, P = onaylayan. O:P'yi satır bazında
+      // birleştirmek bu iki kutuyu tek kutuya indiriyor ve teslim alanın adı onay kutusunu
+      // da doldurmuş gibi görünüyordu. Teslim alan sistemden otomatik yazılır; onay kutusu
+      // çıktı üzerinde elle imzalandığı için BOŞ bırakılmalıdır (P'ye hiç dokunulmuyor ki
+      // şablonun kenarlık/biçim ayarları bozulmasın).
       sheet.getCell(`O${row}`).value = receipt.receivedByName || '-';
     });
 
