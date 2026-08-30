@@ -85,3 +85,32 @@ describe('arama sayfası — kalan filtreler (regresyon)', () => {
     expect(listReceipts.mock.calls[0][0]).toMatchObject({ startDate: '2026-08-01', endDate: '2026-08-31' });
   });
 });
+
+describe('arama sayfası — telefon kart düzeni', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // 640px altinda thead gizlenip her satir bir karta donusuyor. Etiketler CSS ::before ile
+  // data-label'dan basildigi icin, data-label yanlis/eksikse kartta veri etiketsiz kalir.
+  it('tablo stacked sinifi tasir', async () => {
+    const container = await render();
+    expect(container.querySelector('table.card-table.stacked')).not.toBeNull();
+  });
+
+  it('her veri hücresi thead başlığıyla birebir aynı data-label taşır', async () => {
+    const container = await render();
+    const headers = [...container.querySelectorAll('thead th')].map((th) => th.textContent.trim());
+    const cells = [...container.querySelectorAll('tbody tr:first-child td')];
+
+    expect(cells).toHaveLength(headers.length);
+    cells.forEach((td, i) => {
+      // Son sutun (Cikti butonu) basliksiz; onun da data-label'i bos olmali.
+      expect(td.getAttribute('data-label')).toBe(headers[i]);
+    });
+  });
+
+  it('firma hücresi kart başlığı olarak işaretlenir', async () => {
+    const container = await render();
+    expect(container.querySelector('tbody td.card-title')).not.toBeNull();
+    expect(container.querySelector('tbody td.card-title').textContent).toContain('TEST FIRMA');
+  });
+});

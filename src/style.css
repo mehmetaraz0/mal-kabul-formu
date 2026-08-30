@@ -239,6 +239,53 @@ table.card-table td {
     text-align: right;
     white-space: nowrap;
   }
+
+  /* Kayıt Ara: satırlar karta dönüşür. Bu tablo taranıp üzerine dokunulan bir liste —
+     satırlar arası karşılaştırma yapılmadığı için tablo hizalamasını korumaya gerek yok. */
+  table.card-table.stacked,
+  table.card-table.stacked tbody,
+  table.card-table.stacked tr,
+  table.card-table.stacked td {
+    display: block;
+    width: 100%;
+  }
+  table.card-table.stacked thead { display: none; }
+  table.card-table.stacked tr {
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-card);
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  table.card-table.stacked td {
+    border-bottom: none;
+    padding: 0.2rem 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+  table.card-table.stacked td::before {
+    content: attr(data-label);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--color-label);
+    flex-shrink: 0;
+  }
+  /* Firma adı kartın başlığı: etiketsiz, tam genişlik, vurgulu. */
+  table.card-table.stacked td.card-title {
+    display: block;
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 0.4rem;
+  }
+  table.card-table.stacked td.card-title::before { content: none; }
+  /* Çıktı butonu: etiketi boş, tam genişlik. */
+  table.card-table.stacked td:last-child { padding-top: 0.6rem; }
+  table.card-table.stacked td:last-child::before { content: none; }
+  table.card-table.stacked td:last-child button { width: 100%; }
+  /* "Sonuç bulunamadı" tek hücreli satır kart gibi görünmesin. */
+  table.card-table.stacked td[colspan]::before { content: none; }
 }
 
 @media (min-width: 768px) {

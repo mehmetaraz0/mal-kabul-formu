@@ -4,6 +4,10 @@ import { listProducts } from '../lib/products.js';
 import { escapeHtml } from '../lib/html.js';
 import { navigate } from '../router.js';
 
+// Tablo başlıkları tek yerde: hem <thead> hem de telefon kart düzeninin data-label'ları
+// buradan üretilir. Ayrı ayrı yazılsalardı biri değiştiğinde diğeri sessizce eskirdi.
+const RESULT_COLUMNS = ['Tarih', 'Firma', 'Kaydeden', 'İrsaliye No', ''];
+
 export async function renderArama(container) {
   const [companies, products] = await Promise.all([listCompanies(), listProducts()]);
 
@@ -32,8 +36,8 @@ export async function renderArama(container) {
     <p id="arama-msg"></p>
     <div class="card">
       <div style="overflow-x:auto;">
-        <table class="card-table">
-          <thead><tr><th>Tarih</th><th>Firma</th><th>Kaydeden</th><th>İrsaliye No</th><th></th></tr></thead>
+        <table class="card-table stacked">
+          <thead><tr>${RESULT_COLUMNS.map((c) => `<th>${escapeHtml(c)}</th>`).join('')}</tr></thead>
           <tbody id="results-body"></tbody>
         </table>
       </div>
@@ -64,11 +68,11 @@ export async function renderArama(container) {
       tbody.innerHTML = lastResults
         .map(
           (r) => `<tr>
-            <td>${escapeHtml(r.receipt_date)}</td>
-            <td>${escapeHtml(r.companies.name)}</td>
-            <td>${escapeHtml(r.received_profile?.full_name || '-')}</td>
-            <td>${escapeHtml(r.irsaliye_no || '-')}</td>
-            <td><button data-view="${escapeHtml(r.id)}">Çıktı</button></td>
+            <td data-label="${escapeHtml(RESULT_COLUMNS[0])}">${escapeHtml(r.receipt_date)}</td>
+            <td data-label="${escapeHtml(RESULT_COLUMNS[1])}" class="card-title">${escapeHtml(r.companies.name)}</td>
+            <td data-label="${escapeHtml(RESULT_COLUMNS[2])}">${escapeHtml(r.received_profile?.full_name || '-')}</td>
+            <td data-label="${escapeHtml(RESULT_COLUMNS[3])}">${escapeHtml(r.irsaliye_no || '-')}</td>
+            <td data-label="${escapeHtml(RESULT_COLUMNS[4])}"><button data-view="${escapeHtml(r.id)}">Çıktı</button></td>
           </tr>`
         )
         .join('');
