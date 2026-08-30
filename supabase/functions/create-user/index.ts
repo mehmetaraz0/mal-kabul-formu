@@ -2,15 +2,26 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.45.0';
 
 const ALLOWED_ROLES = ['admin', 'depo_yonetici', 'kalite_ekibi'];
 const EMAIL_DOMAIN = '@malkabul.local';
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type'
+};
 
 function jsonResponse(body, status) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' }
+    headers: { 'Content-Type': 'application/json', ...CORS_HEADERS }
   });
 }
 
 Deno.serve(async (req) => {
+  // supabase-js'in functions.invoke() çağrısı tarayıcıdan yapıldığında Authorization/
+  // Content-Type header'ları yüzünden bir CORS preflight (OPTIONS) isteği gönderir — bu
+  // yanıtlanmazsa tarayıcı asıl POST isteğini hiç göndermez.
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: CORS_HEADERS });
+  }
+
   if (req.method !== 'POST') {
     return jsonResponse({ error: 'Method not allowed' }, 405);
   }
