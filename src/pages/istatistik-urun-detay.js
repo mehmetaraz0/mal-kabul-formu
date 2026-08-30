@@ -33,7 +33,7 @@ export async function renderIstatistikUrunDetay(container) {
       table.innerHTML = `
         <div style="overflow-x:auto;">
           <table class="card-table">
-            <thead><tr><th>Firma</th><th>Marka</th><th>Toplam Kg</th><th>Toplam Adet</th><th>Red Sayısı</th></tr></thead>
+            <thead><tr><th>Firma</th><th>Marka</th><th class="num">Toplam Kg</th><th class="num">Toplam Adet</th><th class="num">Red Sayısı</th></tr></thead>
             <tbody>
               ${rows
                 .map(
@@ -41,9 +41,9 @@ export async function renderIstatistikUrunDetay(container) {
                 <tr>
                   <td>${escapeHtml(r.companyName)}</td>
                   <td>${escapeHtml(r.marka)}</td>
-                  <td>${r.totalKg > 0 ? Math.round(r.totalKg * 100) / 100 : '-'}</td>
-                  <td>${r.totalAdet > 0 ? Math.round(r.totalAdet * 100) / 100 : '-'}</td>
-                  <td>${r.rejectedCount > 0 ? r.rejectedCount : '-'}</td>
+                  <td class="num">${r.totalKg > 0 ? Math.round(r.totalKg * 100) / 100 : '-'}</td>
+                  <td class="num">${r.totalAdet > 0 ? Math.round(r.totalAdet * 100) / 100 : '-'}</td>
+                  <td class="num">${r.rejectedCount > 0 ? r.rejectedCount : '-'}</td>
                 </tr>`
                 )
                 .join('')}

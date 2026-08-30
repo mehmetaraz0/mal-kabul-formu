@@ -223,6 +223,24 @@ table.card-table td {
   border-bottom: 1px solid var(--color-border);
 }
 
+/* Telefon: veri tabloları sıkıştırılır. Uzun firma/ürün adları alt satıra kayar; sayısal
+   sütunlar sağa hizalı ve bölünmez kalır ki Kg/Adet/Red rakamları alt alta
+   karşılaştırılabilsin (bkz. docs/superpowers/specs/2026-08-30-telefon-responsive-tablolar-design.md).
+   `num` sınıfı bilerek kullanılıyor: sayısal sütunların konumu sayfadan sayfaya değiştiği
+   için :nth-child tabanlı bir kural kırılgan olurdu. */
+@media screen and (max-width: 640px) {
+  table.card-table th { padding: 0.35rem 0.4rem; }
+  table.card-table td {
+    font-size: 0.85rem;
+    padding: 0.35rem 0.4rem;
+    word-break: break-word;
+  }
+  table.card-table .num {
+    text-align: right;
+    white-space: nowrap;
+  }
+}
+
 @media (min-width: 768px) {
   #app { max-width: 1080px; margin: 0 auto; width: 100%; }
 }

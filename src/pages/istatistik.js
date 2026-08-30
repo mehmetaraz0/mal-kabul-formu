@@ -7,16 +7,16 @@ function renderTable(rows, nameLabel) {
   return `
     <div style="overflow-x:auto;">
     <table class="card-table">
-      <thead><tr><th>${nameLabel}</th><th>Toplam Kg</th><th>Toplam Adet</th><th>Red Sayısı</th></tr></thead>
+      <thead><tr><th>${nameLabel}</th><th class="num">Toplam Kg</th><th class="num">Toplam Adet</th><th class="num">Red Sayısı</th></tr></thead>
       <tbody>
         ${rows
           .map(
             (r) => `
           <tr>
             <td><button class="btn-ghost" data-detay="${escapeHtml(r.id)}" data-name="${escapeHtml(r.name)}">${escapeHtml(r.name)}</button></td>
-            <td>${r.totalKg > 0 ? Math.round(r.totalKg * 100) / 100 : '-'}</td>
-            <td>${r.totalAdet > 0 ? Math.round(r.totalAdet * 100) / 100 : '-'}</td>
-            <td>${r.rejectedCount > 0 ? r.rejectedCount : '-'}</td>
+            <td class="num">${r.totalKg > 0 ? Math.round(r.totalKg * 100) / 100 : '-'}</td>
+            <td class="num">${r.totalAdet > 0 ? Math.round(r.totalAdet * 100) / 100 : '-'}</td>
+            <td class="num">${r.rejectedCount > 0 ? r.rejectedCount : '-'}</td>
           </tr>`
           )
           .join('')}
