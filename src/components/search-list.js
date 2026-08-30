@@ -48,6 +48,29 @@ export function renderSearchList(container, { items, getLabel, getKey, onSelect,
   // kaydediyor; seçim, parmak kaymadan kalktıysa (DRAG_TOLERANCE_PX) pointerup'ta yapılıyor.
   const DRAG_TOLERANCE_PX = 10;
 
+  // Seçim pointerup'ta kesinleşip liste kapandıktan SONRA tarayıcı, aynı dokunuş için
+  // uyumluluk fare olaylarını (mousedown/mouseup/click) yine de gönderir. Liste artık
+  // kapalı olduğu için bu olaylar o koordinatta duran ALTTAKİ elemana düşer — kartın SKT
+  // kutusuna — ve yerli tarih seçicisini açardı (cihaz videosunda birebir gözlendi).
+  // `pointerup`'ta preventDefault() bunu engellemez: spec gereği uyumluluk fare olaylarını
+  // yalnızca `pointerdown`'ın iptali bastırır, ama pointerdown'ı iptal etmek listenin
+  // kaydırılmasını bozardı. Bu yüzden seçimden sonraki kısa pencerede gelen fare olaylarını
+  // yakalama fazında yutuyoruz. Pencere, gerçek bir kullanıcı etkileşiminin sığamayacağı
+  // kadar kısa; hayalet olaylar ise milisaniyeler içinde gelir.
+  const GHOST_EVENT_WINDOW_MS = 350;
+
+  function swallowGhostMouseEvents() {
+    const types = ['mousedown', 'mouseup', 'click'];
+    const swallow = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+    };
+    types.forEach((t) => document.addEventListener(t, swallow, true));
+    setTimeout(() => {
+      types.forEach((t) => document.removeEventListener(t, swallow, true));
+    }, GHOST_EVENT_WINDOW_MS);
+  }
+
   function bindItemSelection(source) {
     list.querySelectorAll('li[data-key]').forEach((li) => {
       let start = null;
@@ -76,6 +99,9 @@ export function renderSearchList(container, { items, getLabel, getKey, onSelect,
         const moved = Math.hypot(e.clientX - start.x, e.clientY - start.y);
         start = null;
         if (moved > DRAG_TOLERANCE_PX) return; // kaydırma hareketi, seçim değil
+        // Yalnızca dokunmatik/pointer yolunda: aşağıdaki click fallback'i kendi zincirinde
+        // zaten tek olay olduğu için orada yutacak bir şey yok.
+        swallowGhostMouseEvents();
         commit(e);
       });
 

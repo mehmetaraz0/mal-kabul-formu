@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { filterItems, renderSearchList } from '../src/components/search-list.js';
 
 describe('filterItems', () => {
@@ -126,6 +126,16 @@ describe('renderSearchList', () => {
 });
 
 describe('renderSearchList — dokunmatik seçim', () => {
+  // Her seçim, 350ms'lik bir "hayalet olay yutma" penceresi açıyor (document'a yakalama
+  // fazında dinleyici bağlıyor). Testler milisaniyeler içinde koştuğu için, sahte zamanlayıcı
+  // olmadan bir testin penceresi bir sonrakinin olaylarını yutuyor. afterEach'te bekleyen
+  // zamanlayıcıları boşaltarak her testi izole ediyoruz.
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => {
+    vi.runOnlyPendingTimers();
+    vi.useRealTimers();
+  });
+
   function setup() {
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -191,6 +201,46 @@ describe('renderSearchList — dokunmatik seçim', () => {
     li.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 
     expect(selected).toHaveLength(1);
+  });
+
+  // Videodan doğrulanan kök neden: pointerup'ta seçim yapılıp liste kapatılınca, tarayıcının
+  // hemen ardından gönderdiği uyumluluk `click`'i artık boşalan koordinatta duran ALTTAKİ
+  // elemana (kartın SKT kutusuna) düşüyor ve yerli tarih seçicisini açıyordu. `pointerup`'ta
+  // preventDefault() bunu engellemez — spec gereği uyumluluk fare olaylarını yalnızca
+  // `pointerdown`'ın iptali bastırır.
+  it('seçimden sonraki hayalet click alttaki elemana ULAŞMAZ', () => {
+    const { container } = setup();
+    const arkadakiHucre = document.createElement('input');
+    let arkadakiTiklandi = false;
+    arkadakiHucre.addEventListener('click', () => { arkadakiTiklandi = true; });
+    document.body.appendChild(arkadakiHucre);
+
+    const li = container.querySelector('li[data-key="1"]');
+    pointer(li, 'pointerdown', 100, 200);
+    pointer(li, 'pointerup', 100, 200);
+    // Tarayıcının seçimden hemen sonra gönderdiği hayalet click:
+    arkadakiHucre.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    expect(arkadakiTiklandi).toBe(false);
+    arkadakiHucre.remove();
+  });
+
+  it('hayalet click penceresi kapandıktan sonra normal tıklamalar yine çalışır', () => {
+    const { container } = setup();
+    const baskaEleman = document.createElement('input');
+    let tiklandi = false;
+    baskaEleman.addEventListener('click', () => { tiklandi = true; });
+    document.body.appendChild(baskaEleman);
+
+    const li = container.querySelector('li[data-key="1"]');
+    pointer(li, 'pointerdown', 100, 200);
+    pointer(li, 'pointerup', 100, 200);
+    vi.advanceTimersByTime(1000);
+
+    baskaEleman.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+
+    expect(tiklandi).toBe(true);
+    baskaEleman.remove();
   });
 
   it('pointer olayı olmayan ortamda click hâlâ seçim yapar (geri uyumluluk)', () => {
