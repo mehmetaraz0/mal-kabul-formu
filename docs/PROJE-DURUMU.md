@@ -1,7 +1,7 @@
 # Mal Kabul Formu — Proje Durumu ve Devir Notu
 
 Bu belge, projeyi hiç bilmeyen bir yapay zeka asistanının (veya geliştiricinin) kaldığı yerden
-devam edebilmesi için yazıldı. Tarih: 2026-08-30.
+devam edebilmesi için yazıldı. Tarih: 2026-08-30 (son güncelleme: aynı gün, ikinci oturum).
 
 ## Proje Nedir
 
@@ -30,6 +30,18 @@ kaydediyor; sistem F.22 resmi form şablonuna uygun PDF/Excel çıktısı üreti
 
 ## Kritik Kısıtlar / Kurallar (mutlaka bilinmesi gereken)
 
+0. **ÖNCE HANGİ ÇALIŞMA ALANINDA OLDUĞUNU DOĞRULA.** Ana checkout (`D:\kabul formu`) uzun süre
+   `origin/master`'ın 56 commit GERİSİNDE takılı kaldı ve bir oturum boyunca fark edilmeden o
+   bayat kod üzerinde çalışıldı — kaldırılmış `kalite-onay.js` akışına özellik eklendi, hepsi
+   çöpe gitti. İşe başlamadan MUTLAKA şunu çalıştır:
+   ```bash
+   git log --oneline -1 && git status -sb && git fetch -q origin && git log --oneline -1 origin/master
+   ```
+   HEAD `origin/master` ile aynı değilse önce `git merge --ff-only origin/master` yap. Gerçek
+   geliştirme worktree'si `.claude/worktrees/gorsel-tasarim-yenileme` (branch
+   `worktree-gorsel-tasarim-yenileme`); deploy oradan yapılır. Bir ekran görüntüsündeki arayüz
+   koda uymuyorsa iki şüpheli vardır: (a) bayat checkout, (b) tarayıcıdaki bayat service worker
+   paketi — ikisi de bu projede gerçekten yaşandı.
 1. **Supabase migration'ları OTOMATİK ÇALIŞMAZ.** `supabase/migrations/` altına yeni bir `.sql`
    dosyası eklemek onu production'a UYGULAMAZ — kullanıcının bu dosyanın TAM içeriğini Supabase
    Dashboard → SQL Editor'a yapıştırıp çalıştırması gerekir. Kullanıcıya dosyanın tam yolunu VE
@@ -63,7 +75,10 @@ kaydediyor; sistem F.22 resmi form şablonuna uygun PDF/Excel çıktısı üreti
 - `companies` (id, sira_no, name)
 - `products` (id, code, name, unit: `kg`|`ad`, category)
 - `receipts` (id, client_uuid, company_id, receipt_date, irsaliye_no, received_by, status:
-  `taslak`|`onaylandi`|(eski: `kalite_bekliyor`|`reddedildi`, artık RPC bunları üretmiyor),
+  pratikte HER ZAMAN `onaylandi` — arayüzde tek "Kaydet" butonu var ve her zaman
+  `submitToQuality: true` gönderiyor. `taslak` şema/RPC seviyesinde hâlâ mümkün ama arayüzden
+  üretilemiyor; mevcut taslak test kayıtları da temizlendi. `kalite_bekliyor`/`reddedildi`
+  tamamen eski (0012'den beri üretilmiyor),
   fatura_no, arac_hijyen_uygun, arac_sicaklik, quality_by/quality_note — bu ikisi kalite-onayı
   akışından kalma, artık kullanılmıyor ama sütun duruyor)
 - `receipt_items` (id, receipt_id, product_id, line_no, lot_no, skt, quantity, unit, uygunluk:
@@ -86,7 +101,18 @@ sentetik e-postasına çevrilip Supabase Auth'a öyle gönderiliyor — bkz. `sr
 
 ## Bu Oturumda Tamamlanan Büyük İşler (yakından eskiye)
 
-1. **Ürün Kartı Yeniden Tasarımı** (son iş): Yeni Mal Kabul'deki ürün girişi, satır bazlı tablodan
+0. **İkinci oturum (bakım turu)** — üç deploy:
+   - `cf6423a` Service worker periyodik güncelleme kontrolü (`src/lib/sw-update.js`, 15 dk).
+     Güncelleme çubuğu zaten vardı ama gün boyu açık kalan sekmelerde hiç tetiklenemiyordu.
+   - `beabe0c` Kayıt Ara'dan DURUM sütunu ve filtresi kaldırıldı (kullanıcı isteği).
+   - `c4e9535` Yeni Mal Kabul'den "Taslak Kaydet" butonu kaldırıldı; tek "Kaydet" kaldı, her
+     kartın Uygun/Uygunsuz işaretlenmesi artık ZORUNLU (veritabanı 0007'de zaten böyleydi).
+     Buton id'si `submit-quality-btn` → `save-btn`.
+   - Veri temizliği (SQL Editor'da elle çalıştırıldı, migration DEĞİL): 3 adet taslak test kaydı
+     (`TEST-DIAG`, `PAGETEST-15` ve irsaliyesiz olan) ve cascade ile 17 kalemi silindi.
+     Çalıştırılan sorgu: `delete from receipts where status = 'taslak' and id in (...)`.
+   - Test sayısı 180 → 200. Yeni test dosyaları: `sw-update.test.js`, `arama.test.js`.
+1. **Ürün Kartı Yeniden Tasarımı**: Yeni Mal Kabul'deki ürün girişi, satır bazlı tablodan
    her kalem için dikey bir karta (kendi popup ürün arama kutusu, Uygun/Uygunsuz iki buton,
    Kartı Sil) dönüştürüldü. `docs/superpowers/specs/2026-08-30-urun-karti-tasarimi.md` +
    `docs/superpowers/plans/2026-08-30-urun-karti-tasarimi.md`. Ana dosya: `src/pages/yeni-kabul.js`.
@@ -106,16 +132,15 @@ sentetik e-postasına çevrilip Supabase Auth'a öyle gönderiliyor — bkz. `sr
 
 ## Bilinen/Açık Sorunlar
 
-- **[DOĞRULANMADI] "Kayıt Ara" sayfasında Ürün filtresi boş görünüyor, Firma filtresi doluyor.**
-  Kullanıcı bunu deploy sonrası bildirdi ama araştırma tamamlanmadan konuşma kesildi. İlk bakışta
-  `src/pages/arama.js:22`'deki `Promise.all([listCompanies(), listProducts()])` hata fırlatsaydı
-  İKİSİ de boş kalırdı (tek hata ikisini de reddeder) — yani `listProducts()` muhtemelen hata
-  vermeden ama BOŞ bir dizi döndürüyor. Kontrol edilecekler: `src/lib/products.js`'teki
-  `listProducts()`'ın gerçekten satır döndürüp döndürmediği (Supabase'de `products` tablosunda
-  satır var mı, RLS `products_select_all` politikası hâlâ `using(true)` mi — bkz. migration 0002),
-  tarayıcı console'unda bir hata olup olmadığı, service worker'ın eski bir JS chunk'ı önbellekten
-  sunup sunmadığı (bu projede tekrar eden bir "sahte bug" kaynağı — `registerType: 'prompt'`
-  olduğu için kullanıcı "Yenile"ye basmadan güncelleme uygulanmıyor).
+- **[ÇÖZÜLDÜ] "Kayıt Ara" sayfasında Ürün filtresi boş görünüyor.** Kök neden veri veya RLS
+  DEĞİLDİ: tarayıcı bayat bir JS paketi sunuyordu. Kanıt, "Kaydeden" sütununun yenilemeler
+  arasında kaybolup geri gelmesiydi (iki farklı build). Site verisi temizlenip sert yenileme
+  yapıldıktan sonra `$$('#filter-product option').length` = 65 döndü, yani filtre hep doluydu.
+  `products_select_all` politikası 0002'den beri `using(true)` ve hiçbir migration onu
+  değiştirmemiş. Kalıcı çözüm için service worker artık 15 dakikada bir güncelleme kontrolü
+  yapıyor (`src/lib/sw-update.js`), böylece güncelleme çubuğu gün boyu açık kalan sekmelerde de
+  görünebiliyor — eskiden `onNeedRefresh` yalnızca sayfa yeniden yüklenirse tetiklendiği için
+  çubuk pratikte ulaşılamazdı.
 - Design spec'lerdeki "Açık Sorular" bölümlerinde kayıtlı, bilinçli olarak ertelenmiş küçük
   konular var (ör. marka'nın serbest metin olması nedeniyle yazım tutarsızlığı riski, kayıt
   detay sayfalarında bazı alanların salt-okunur kalması) — kritik değil, sadece bilgi amaçlı.
