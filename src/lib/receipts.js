@@ -26,6 +26,7 @@ export async function createReceiptWithItems({
     p_items: items.map((item, index) => ({
       productId: item.productId,
       lineNo: index + 1,
+      marka: item.marka || null,
       lotNo: item.lotNo || null,
       skt: item.skt || null,
       quantity: item.quantity,

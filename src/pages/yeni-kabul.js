@@ -50,7 +50,7 @@ export async function renderYeniKabul(container) {
       <div style="overflow-x:auto;">
         <table id="items-table" class="card-table">
           <thead>
-            <tr><th>Ürün</th><th>Lot No</th><th>SKT</th><th>Miktar</th><th>Birim</th><th>Ürün Sıcaklığı</th><th>Yarı Ömür Geçti mi</th><th>Uygunluk</th><th>Not</th><th></th></tr>
+            <tr><th>Ürün</th><th>Marka</th><th>Lot No</th><th>SKT</th><th>Miktar</th><th>Birim</th><th>Ürün Sıcaklığı</th><th>Yarı Ömür Geçti mi</th><th>Uygunluk</th><th>Not</th><th></th></tr>
           </thead>
           <tbody id="items-body"></tbody>
         </table>
@@ -87,6 +87,7 @@ export async function renderYeniKabul(container) {
         (item, i) => `
       <tr>
         <td>${escapeHtml(item.code)} — ${escapeHtml(item.name)}</td>
+        <td><input type="text" data-field="marka" data-index="${i}" value="${escapeHtml(item.marka)}" style="width:100px;" placeholder="Marka" /></td>
         <td><input type="text" data-field="lotNo" data-index="${i}" value="${escapeHtml(item.lotNo)}" /></td>
         <td><input type="date" data-field="skt" data-index="${i}" value="${escapeHtml(item.skt)}" /></td>
         <td><input type="number" min="0" step="0.01" data-field="quantity" data-index="${i}" value="${escapeHtml(item.quantity)}" style="width:80px;" /></td>
@@ -140,7 +141,7 @@ export async function renderYeniKabul(container) {
     getKey: (p) => p.id,
     placeholder: 'Eklenecek ürünü ara...',
     onSelect: (p) => {
-      state.items.push({ productId: p.id, code: p.code, name: p.name, unit: p.unit, lotNo: '', skt: '', quantity: 0, urunSicakligi: '', yariOmurGecti: false, uygunluk: 'beklemede', note: '' });
+      state.items.push({ productId: p.id, code: p.code, name: p.name, unit: p.unit, marka: '', lotNo: '', skt: '', quantity: 0, urunSicakligi: '', yariOmurGecti: false, uygunluk: 'beklemede', note: '' });
       renderItemsBody();
     }
   });

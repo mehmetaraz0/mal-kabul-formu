@@ -191,4 +191,19 @@ describe('receipts', () => {
     expect(rpcCall[1].p_items[0].uygunluk).toBeUndefined();
     expect(rpcCall[1].p_items[0].note).toBeUndefined();
   });
+
+  it('createReceiptWithItems marka değerini RPC\'ye gönderir', async () => {
+    await createReceiptWithItems({
+      ...baseArgs,
+      items: [{ productId: 1, lotNo: 'L1', skt: '2026-09-01', quantity: 10, unit: 'kg', marka: 'Dardanel' }]
+    });
+    const rpcCall = supabase.rpc.mock.calls.find((call) => call[0] === 'create_receipt_with_items');
+    expect(rpcCall[1].p_items[0].marka).toBe('Dardanel');
+  });
+
+  it('createReceiptWithItems marka verilmezse RPC\'ye null gönderir', async () => {
+    await createReceiptWithItems({ ...baseArgs, items: validItems });
+    const rpcCall = supabase.rpc.mock.calls.find((call) => call[0] === 'create_receipt_with_items');
+    expect(rpcCall[1].p_items[0].marka).toBeNull();
+  });
 });
