@@ -1,5 +1,6 @@
 import { getStatistics } from '../lib/statistics.js';
 import { escapeHtml } from '../lib/html.js';
+import { navigate } from '../router.js';
 
 function renderTable(rows, nameLabel) {
   if (rows.length === 0) return '<p>Kayıt bulunamadı.</p>';
@@ -12,7 +13,7 @@ function renderTable(rows, nameLabel) {
           .map(
             (r) => `
           <tr>
-            <td>${escapeHtml(r.name)}</td>
+            <td><button class="btn-ghost" data-detay="${escapeHtml(r.id)}" data-name="${escapeHtml(r.name)}">${escapeHtml(r.name)}</button></td>
             <td>${r.totalKg > 0 ? Math.round(r.totalKg * 100) / 100 : '-'}</td>
             <td>${r.totalAdet > 0 ? Math.round(r.totalAdet * 100) / 100 : '-'}</td>
             <td>${r.rejectedCount > 0 ? r.rejectedCount : '-'}</td>
@@ -54,7 +55,17 @@ export async function renderIstatistik(container) {
       const endDate = container.querySelector('#istatistik-end').value || undefined;
       const { products, companies, truncated } = await getStatistics({ startDate, endDate });
       container.querySelector('#istatistik-products').innerHTML = renderTable(products, 'Ürün Adı');
+      container.querySelectorAll('#istatistik-products [data-detay]').forEach((btn) => {
+        btn.addEventListener('click', () =>
+          navigate('/istatistik-urun-detay?id=' + btn.dataset.detay + '&name=' + encodeURIComponent(btn.dataset.name))
+        );
+      });
       container.querySelector('#istatistik-companies').innerHTML = renderTable(companies, 'Firma Adı');
+      container.querySelectorAll('#istatistik-companies [data-detay]').forEach((btn) => {
+        btn.addEventListener('click', () =>
+          navigate('/istatistik-firma-detay?id=' + btn.dataset.detay + '&name=' + encodeURIComponent(btn.dataset.name))
+        );
+      });
       if (truncated) {
         msg.style.color = '#a15c00';
         msg.textContent = 'Çok fazla kayıt var, sonuçlar eksik olabilir — tarih aralığını daraltın.';

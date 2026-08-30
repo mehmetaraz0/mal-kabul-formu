@@ -8,6 +8,8 @@ import { renderUrunler } from './pages/urunler.js';
 import { renderYeniKabul } from './pages/yeni-kabul.js';
 import { renderArama } from './pages/arama.js';
 import { renderIstatistik } from './pages/istatistik.js';
+import { renderIstatistikUrunDetay } from './pages/istatistik-urun-detay.js';
+import { renderIstatistikFirmaDetay } from './pages/istatistik-firma-detay.js';
 import { renderMalKabulCiktisi } from './pages/mal-kabul-ciktisi.js';
 import { escapeHtml } from './lib/html.js';
 import { registerRoute, startRouter, navigate, resetRoutes } from './router.js';
@@ -170,6 +172,8 @@ async function renderApp() {
     if (canCreateReceipt) registerRoute('/yeni-kabul', renderYeniKabul);
     registerRoute('/arama', renderArama);
     registerRoute('/istatistik', renderIstatistik);
+    registerRoute('/istatistik-urun-detay', renderIstatistikUrunDetay);
+    registerRoute('/istatistik-firma-detay', renderIstatistikFirmaDetay);
     registerRoute('/mal-kabul-ciktisi', renderMalKabulCiktisi);
     if (isAdmin) registerRoute('/kullanicilar', renderKullanicilar);
     startRouter(pageContent);
