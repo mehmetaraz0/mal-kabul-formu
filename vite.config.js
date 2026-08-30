@@ -14,7 +14,7 @@ export default defineConfig({
       // kullanıcıya "Yeni sürüm mevcut / Yenile" çubuğunu gösterir ve güncelleme ancak kullanıcı
       // onaylayınca uygulanır.
       registerType: 'prompt',
-      includeAssets: ['icons/icon-192.png', 'icons/icon-512.png'],
+      includeAssets: ['favicon.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'],
       manifest: {
         name: 'Mal Kabul Formu',
         short_name: 'MalKabul',
