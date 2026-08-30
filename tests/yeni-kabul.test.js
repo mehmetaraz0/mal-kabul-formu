@@ -33,8 +33,15 @@ function selectFirstFromSearchList(container, pickerId) {
   li.dispatchEvent(new MouseEvent('click', { bubbles: true }));
 }
 
+// Ürün seçimi popup değil her zaman görünen bir tablo (kullanıcı isteği) — Firma seçiminden
+// (search-list.js tabanlı popup) farklı bir DOM yapısı, bu yüzden ayrı bir yardımcı gerekiyor.
+function selectFirstFromUrunTablo(container) {
+  const btn = container.querySelector('#urun-picker [data-add]');
+  btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+}
+
 function addFirstProductRow(container) {
-  selectFirstFromSearchList(container, 'urun-picker');
+  selectFirstFromUrunTablo(container);
   const qtyInput = container.querySelector('#items-body input[data-field="quantity"][data-index="0"]');
   qtyInput.value = '5';
   qtyInput.dispatchEvent(new Event('input', { bubbles: true }));
@@ -138,7 +145,7 @@ describe('yeni-kabul save() - yerel doğrulama vs. çevrimdışı kuyruğa yazma
 
   it('regresyon: miktar<=0 varken (mevcut kontrol) hâlâ kuyruğa yazmadan hata gösterir', async () => {
     selectFirstFromSearchList(container, 'firma-picker');
-    selectFirstFromSearchList(container, 'urun-picker');
+    selectFirstFromUrunTablo(container);
     // quantity varsayılan olarak 0 bırakılıyor (addFirstProductRow kullanılmadı)
 
     Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
@@ -163,5 +170,59 @@ describe('yeni-kabul save() - yerel doğrulama vs. çevrimdışı kuyruğa yazma
     expect(msg.textContent).toContain('Uygun / Uygun Değil');
     expect(createReceiptWithItems).not.toHaveBeenCalled();
     expect(enqueueReceipt).not.toHaveBeenCalled();
+  });
+});
+
+describe('yeni-kabul ürün tablosu — popup değil her zaman görünen tablo', () => {
+  let container;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    getCurrentProfile.mockResolvedValue({ id: 'u1', full_name: 'Depo Yöneticisi', role: 'depo_yonetici' });
+    listCompanies.mockResolvedValue([{ id: 1, name: 'TEST FIRMA' }]);
+    listProducts.mockResolvedValue([
+      { id: 1, code: 'P1', name: 'DANA KUŞBAŞI', unit: 'kg', category: 'ET' },
+      { id: 2, code: 'P2', name: 'TAVUK BUT', unit: 'kg', category: 'ET' }
+    ]);
+
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    await renderYeniKabul(container);
+  });
+
+  afterEach(() => {
+    container.remove();
+  });
+
+  it('hiçbir şey yazılmadan tüm ürünler tabloda görünür (popup gibi gizli değil)', () => {
+    const rows = container.querySelectorAll('#urun-picker tbody tr');
+    expect(rows).toHaveLength(2);
+    expect(container.querySelector('#urun-picker').textContent).toContain('DANA KUŞBAŞI');
+    expect(container.querySelector('#urun-picker').textContent).toContain('TAVUK BUT');
+  });
+
+  it('filtre kutusuna yazınca tablo eşleşmeyen ürünleri gizler', () => {
+    const filtre = container.querySelector('#urun-tablo-filtre');
+    filtre.value = 'tavuk';
+    filtre.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const body = container.querySelector('#urun-picker tbody');
+    expect(body.textContent).toContain('TAVUK BUT');
+    expect(body.textContent).not.toContain('DANA KUŞBAŞI');
+  });
+
+  it('bir satırdaki "Ekle" butonuna tıklanınca o ürün satır tablosuna eklenir', () => {
+    const btn = container.querySelectorAll('#urun-picker [data-add]')[1]; // TAVUK BUT
+    btn.click();
+
+    const items = container.querySelectorAll('#items-body tr');
+    expect(items).toHaveLength(1);
+    expect(items[0].textContent).toContain('TAVUK BUT');
+  });
+
+  it('Firma seçimi hâlâ popup olarak çalışır (bu değişiklikten etkilenmedi)', () => {
+    const list = container.querySelector('#firma-picker .search-results');
+    expect(list.style.display).toBe('none');
+    expect(container.querySelector('#firma-picker tbody')).toBeNull();
   });
 });
