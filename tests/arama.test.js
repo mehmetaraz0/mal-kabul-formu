@@ -114,3 +114,21 @@ describe('arama sayfası — telefon kart düzeni', () => {
     expect(container.querySelector('tbody td.card-title').textContent).toContain('TEST FIRMA');
   });
 });
+
+describe('arama sayfası — filtre çubuğu telefon genişliği', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // Firma/Ürün alanlarında min-width+flex var, tarih alanlarında yoktu: flex-wrap'li konteynerde
+  // tarih girdileri "Ara"/"Excel İndir" butonlarıyla aynı satıra sıkışıp gg.aa.yyyy metnini
+  // gösteremeyecek kadar daralıyordu (gerçek cihazda yalnızca ok işareti görünüyordu).
+  it('tarih filtreleri, firma filtresiyle aynı genişlik davranışını taşır', async () => {
+    const container = await render();
+    const firmaAlani = container.querySelector('#filter-company').parentElement;
+
+    ['filter-start', 'filter-end'].forEach((id) => {
+      const alan = container.querySelector(`#${id}`).parentElement;
+      expect(alan.style.flex).toBe(firmaAlani.style.flex);
+      expect(parseInt(alan.style.minWidth, 10)).toBeGreaterThanOrEqual(130);
+    });
+  });
+});

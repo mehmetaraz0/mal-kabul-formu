@@ -23,8 +23,8 @@ export async function renderArama(container) {
           <label class="field-label" for="filter-product">Ürün</label>
           <select id="filter-product"><option value="">Tümü</option>${products.map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.code)} — ${escapeHtml(p.name)}</option>`).join('')}</select>
         </div>
-        <div class="field"><label class="field-label" for="filter-start">Başlangıç</label><input type="date" id="filter-start" /></div>
-        <div class="field"><label class="field-label" for="filter-end">Bitiş</label><input type="date" id="filter-end" /></div>
+        <div class="field" style="min-width:140px;flex:1;"><label class="field-label" for="filter-start">Başlangıç</label><input type="date" id="filter-start" /></div>
+        <div class="field" style="min-width:140px;flex:1;"><label class="field-label" for="filter-end">Bitiş</label><input type="date" id="filter-end" /></div>
         <div class="field" style="justify-content:end;">
           <button id="search-btn">Ara</button>
         </div>
