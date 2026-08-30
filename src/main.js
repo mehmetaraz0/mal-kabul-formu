@@ -9,7 +9,7 @@ import { renderYeniKabul } from './pages/yeni-kabul.js';
 import { renderArama } from './pages/arama.js';
 import { renderMalKabulCiktisi } from './pages/mal-kabul-ciktisi.js';
 import { escapeHtml } from './lib/html.js';
-import { registerRoute, startRouter, navigate } from './router.js';
+import { registerRoute, startRouter, navigate, resetRoutes } from './router.js';
 import { renderOfflineBanner, refreshOfflineBanner } from './components/offline-banner.js';
 import { syncQueuedReceipts } from './lib/offline-queue.js';
 import { registerSW } from 'virtual:pwa-register';
@@ -155,6 +155,7 @@ async function renderApp() {
     });
 
     const pageContent = app.querySelector('#page-content');
+    resetRoutes();
     registerRoute('/', (c) => {
       c.innerHTML = canCreateReceipt
         ? '<p><button class="btn-accent" data-nav="/yeni-kabul">+ Yeni Mal Kabul</button></p>'

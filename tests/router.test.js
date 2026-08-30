@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { registerRoute, navigate, startRouter, _resetRoutes, getQueryParam } from '../src/router.js';
+import { registerRoute, navigate, startRouter, resetRoutes, getQueryParam } from '../src/router.js';
 
 describe('router', () => {
   beforeEach(() => {
-    _resetRoutes();
+    resetRoutes();
     window.location.hash = '';
   });
 
@@ -85,11 +85,29 @@ describe('router', () => {
     navigate('/some-route?foo=bar');
     expect(renderFn).toHaveBeenCalledWith(container);
   });
+
+  it('resetRoutes() sonrası eski (rol bazlı) rotalar artık erişilemez, ana rotaya düşer', () => {
+    const container = document.createElement('div');
+    const adminOnlyFn = vi.fn();
+    const homeFn = vi.fn();
+    registerRoute('/', homeFn);
+    registerRoute('/kullanicilar', adminOnlyFn);
+    startRouter(container);
+
+    resetRoutes();
+    registerRoute('/', homeFn);
+    // '/kullanicilar' bilerek tekrar kaydedilmiyor — bir önceki kullanıcı admin'di,
+    // yenisi değil (main.js'teki role-koşullu registerRoute çağrısının simülasyonu).
+
+    navigate('/kullanicilar');
+    expect(homeFn).toHaveBeenCalled();
+    expect(adminOnlyFn).not.toHaveBeenCalled();
+  });
 });
 
 describe('getQueryParam', () => {
   beforeEach(() => {
-    _resetRoutes();
+    resetRoutes();
     window.location.hash = '';
   });
 

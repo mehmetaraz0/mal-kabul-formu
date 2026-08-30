@@ -78,7 +78,8 @@ Deno.serve(async (req) => {
     email: username.trim().toLowerCase() + EMAIL_DOMAIN,
     password,
     email_confirm: true,
-    user_metadata: { full_name: fullName, role }
+    user_metadata: { full_name: fullName },
+    app_metadata: { role }
   });
 
   if (createError) {

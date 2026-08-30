@@ -1,5 +1,3 @@
-export { hasRole } from './role.js';
-
 import { supabase } from './supabase.js';
 import { cacheAside } from './offline-cache.js';
 

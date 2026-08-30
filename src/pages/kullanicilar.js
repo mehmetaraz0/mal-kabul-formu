@@ -1,4 +1,5 @@
 import { listUsers, updateUserRole, createUser } from '../lib/users.js';
+import { getCurrentProfile } from '../lib/auth.js';
 import { escapeHtml } from '../lib/html.js';
 
 const ROLE_LABELS = {
@@ -9,6 +10,7 @@ const ROLE_LABELS = {
 
 export async function renderKullanicilar(container) {
   const users = await listUsers();
+  const currentProfile = await getCurrentProfile();
 
   container.innerHTML = `
     <div class="card">
@@ -22,11 +24,15 @@ export async function renderKullanicilar(container) {
             <tr>
               <td>${escapeHtml(u.full_name)}</td>
               <td>
-                <select data-role-select="${escapeHtml(u.id)}">
-                  ${Object.entries(ROLE_LABELS)
-                    .map(([value, label]) => `<option value="${value}" ${u.role === value ? 'selected' : ''}>${label}</option>`)
-                    .join('')}
-                </select>
+                ${
+                  u.id === currentProfile.id
+                    ? escapeHtml('Kendi hesabınız — rolünüzü buradan değiştiremezsiniz')
+                    : `<select data-role-select="${escapeHtml(u.id)}">
+                        ${Object.entries(ROLE_LABELS)
+                          .map(([value, label]) => `<option value="${value}" ${u.role === value ? 'selected' : ''}>${label}</option>`)
+                          .join('')}
+                      </select>`
+                }
               </td>
             </tr>`
             )

@@ -9,7 +9,7 @@ export function registerRoute(path, renderFn) {
   routes.set(path, renderFn);
 }
 
-export function _resetRoutes() {
+export function resetRoutes() {
   routes.clear();
   suppressNextHashChange = false;
 }
