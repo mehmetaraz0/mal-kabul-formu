@@ -68,9 +68,13 @@ tek bir yerde tanımlanıp hem `thead` hem `data-label` için kullanılır ki ik
 
 - Yazı boyutu `0.85rem`, hücre boşluğu `0.35rem 0.4rem` (masaüstünde sırasıyla varsayılan ve
   `0.5rem 0.6rem`)
-- İsim/metin sütunu `word-break: break-word` ile alt satıra kayar, kalan genişliği alır
-- **Sayısal sütunlar `text-align: right` + `white-space: nowrap`** — hizalama korunur, rakam
-  ortadan bölünmez
+- İsim/metin sütunu `overflow-wrap: break-word` ile alt satıra kayar, kalan genişliği alır
+  (düzeltme: `word-break: break-word` min-content'i tek karaktere düşürüp sütunu 48px'e
+  daraltıyor ve metni harf harf parçalıyordu — Task 4'ün 375px'teki görsel doğrulamasında
+  tespit edildi; `overflow-wrap` min-content'i en uzun kelime kadar korur)
+- **Sayısal sütunlar `text-align: right`; sadece `td.num` `white-space: nowrap`** — hizalama
+  korunur, rakam ortadan bölünmez (düzeltme: `nowrap` `th.num`'da da varken "Toplam Adet"
+  başlığı sarmayıp sütunu gereksiz genişletiyordu; `nowrap` yalnızca veri hücrelerine taşındı)
 - Mevcut `overflow-x:auto` sarmalayıcılar güvenlik ağı olarak kalır
 
 **Sayısal sütun nasıl belirlenir:** CSS'in bunu konumdan tahmin etmesi kırılgan olurdu

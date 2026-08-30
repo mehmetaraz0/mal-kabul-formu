@@ -167,14 +167,20 @@ Expected: FAIL — `expected length 3, got 0` (henüz `num` sınıfı yok).
   table.card-table td {
     font-size: 0.85rem;
     padding: 0.35rem 0.4rem;
-    word-break: break-word;
+    overflow-wrap: break-word;
   }
-  table.card-table .num {
-    text-align: right;
-    white-space: nowrap;
-  }
+  table.card-table .num { text-align: right; }
+  table.card-table td.num { white-space: nowrap; }
 }
 ```
+
+**Düzeltme notu (Task 4'ün 375px görsel doğrulamasından):** yukarıdaki blok, ilk implementasyonda
+kullanılan `word-break: break-word` ve `.num { white-space: nowrap }` (th dahil) yerine
+düzeltilmiş halidir. `word-break` min-content'i 1 karaktere düşürdüğü için isim sütunu 48px'e
+daralıp metni harf harf bölüyordu (tablo yüksekliği 392px); `overflow-wrap` min-content'i en uzun
+kelime kadar korur (isim sütunu 119px, tablo yüksekliği 176px). `nowrap`'in `th.num`'da da olması
+"Toplam Adet" başlığının sarmasını engelleyip sütunu gereksiz genişletiyordu; `nowrap` sadece
+`td.num`'a taşındı.
 
 - [ ] **Step 7: Testi tekrar çalıştır**
 

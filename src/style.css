@@ -233,12 +233,10 @@ table.card-table td {
   table.card-table td {
     font-size: 0.85rem;
     padding: 0.35rem 0.4rem;
-    word-break: break-word;
+    overflow-wrap: break-word;
   }
-  table.card-table .num {
-    text-align: right;
-    white-space: nowrap;
-  }
+  table.card-table .num { text-align: right; }
+  table.card-table td.num { white-space: nowrap; }
 
   /* Kayıt Ara: satırlar karta dönüşür. Bu tablo taranıp üzerine dokunulan bir liste —
      satırlar arası karşılaştırma yapılmadığı için tablo hizalamasını korumaya gerek yok. */
