@@ -144,3 +144,31 @@ $$;
 -- 7) Bootstrap: mevcut 'test' kullanıcısı ilk admin olarak işaretleniyor.
 update profiles set role = 'admin'
 where id = (select id from auth.users where email = 'test@malkabul.local');
+
+-- 8) profiles_update_own (0002) hâlâ herkesin kendi satırını güncellemesine izin veriyor ve
+--    role artık authenticated'a grant edildiği için (madde 5), bu iki politika Postgres'in
+--    OR birleştirmesi yüzünden BİRLİKTE bir self-escalation açığı oluşturuyor: bir kullanıcı
+--    kendi id'siyle eşleşen satırında role='admin' güncellemesi göndererek profiles_update_own
+--    politikasından geçebilir (madde 5'teki admin kontrolüne hiç takılmadan). RLS tek başına
+--    "bu sütun değişmesin" diyemediği için (receipts'teki lock_receipt_core_fields ile aynı
+--    gerekçe) bir BEFORE UPDATE tetikleyicisiyle kapatılıyor — hangi RLS politikasının UPDATE'i
+--    geçirdiğinden bağımsız çalışır.
+create or replace function public.lock_profile_role_self_edit()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if new.role is distinct from old.role
+    and not exists (select 1 from profiles p where p.id = auth.uid() and p.role = 'admin')
+  then
+    raise exception 'Rol değişikliği sadece admin tarafından yapılabilir';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists lock_profile_role_self_edit_trigger on profiles;
+create trigger lock_profile_role_self_edit_trigger
+  before update on profiles
+  for each row execute procedure public.lock_profile_role_self_edit();
