@@ -71,3 +71,86 @@ export async function getStatistics({ startDate, endDate } = {}) {
     truncated: count > data.length
   };
 }
+
+function groupDetailRows(data, { groupKey, buildRow, applyKgAdet }) {
+  const map = new Map();
+  for (const item of data) {
+    const key = groupKey(item);
+    if (!map.has(key)) {
+      map.set(key, buildRow(item));
+    }
+    applyKgAdet(map.get(key), item);
+  }
+  const byKgDesc = (a, b) => b.totalKg - a.totalKg;
+  return [...map.values()].sort(byKgDesc);
+}
+
+function applyItemTotals(row, item) {
+  if (item.unit === 'kg') row.totalKg += Number(item.quantity);
+  if (item.unit === 'ad') row.totalAdet += Number(item.quantity);
+  if (item.uygunluk === 'uygun_degil') row.rejectedCount += 1;
+}
+
+export async function getProductDetail(productId, { startDate, endDate } = {}) {
+  let query = supabase
+    .from('receipt_items')
+    .select(
+      'marka, quantity, unit, uygunluk, receipts!inner (receipt_date, status, company_id, companies (id, name))',
+      { count: 'exact' }
+    )
+    .eq('product_id', productId)
+    .eq('receipts.status', 'onaylandi')
+    .limit(STATISTICS_ROW_LIMIT);
+  if (startDate) query = query.gte('receipts.receipt_date', startDate);
+  if (endDate) query = query.lte('receipts.receipt_date', endDate);
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+
+  const rows = groupDetailRows(data, {
+    groupKey: (item) => `${item.receipts?.company_id}::${item.marka || ''}`,
+    buildRow: (item) => ({
+      companyId: item.receipts?.company_id,
+      companyName: item.receipts?.companies?.name || '-',
+      marka: item.marka || '-',
+      totalKg: 0,
+      totalAdet: 0,
+      rejectedCount: 0
+    }),
+    applyKgAdet: applyItemTotals
+  });
+
+  return { rows, truncated: count > data.length };
+}
+
+export async function getCompanyDetail(companyId, { startDate, endDate } = {}) {
+  let query = supabase
+    .from('receipt_items')
+    .select(
+      'marka, quantity, unit, uygunluk, product_id, products (name), receipts!inner (receipt_date, status, company_id)',
+      { count: 'exact' }
+    )
+    .eq('receipts.company_id', companyId)
+    .eq('receipts.status', 'onaylandi')
+    .limit(STATISTICS_ROW_LIMIT);
+  if (startDate) query = query.gte('receipts.receipt_date', startDate);
+  if (endDate) query = query.lte('receipts.receipt_date', endDate);
+
+  const { data, error, count } = await query;
+  if (error) throw error;
+
+  const rows = groupDetailRows(data, {
+    groupKey: (item) => `${item.product_id}::${item.marka || ''}`,
+    buildRow: (item) => ({
+      productId: item.product_id,
+      productName: item.products?.name || '-',
+      marka: item.marka || '-',
+      totalKg: 0,
+      totalAdet: 0,
+      rejectedCount: 0
+    }),
+    applyKgAdet: applyItemTotals
+  });
+
+  return { rows, truncated: count > data.length };
+}

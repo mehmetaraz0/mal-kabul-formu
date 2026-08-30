@@ -22,7 +22,7 @@ vi.mock('../src/lib/supabase.js', () => ({
   supabase: { from: vi.fn(() => query) }
 }));
 
-import { getStatistics, STATISTICS_ROW_LIMIT } from '../src/lib/statistics.js';
+import { getStatistics, getProductDetail, getCompanyDetail, STATISTICS_ROW_LIMIT } from '../src/lib/statistics.js';
 
 function row({ productId, productName, companyId, companyName, unit, quantity, uygunluk }) {
   return {
@@ -154,5 +154,127 @@ describe('getStatistics', () => {
   it('supabase hata dönerse fırlatır', async () => {
     mockData = { data: null, error: { message: 'network error' } };
     await expect(getStatistics({})).rejects.toEqual({ message: 'network error' });
+  });
+});
+
+function detailRow({ marka, companyId, companyName, productId, productName, unit, quantity, uygunluk }) {
+  return {
+    marka,
+    quantity,
+    unit,
+    uygunluk,
+    product_id: productId,
+    products: { name: productName },
+    receipts: { receipt_date: '2026-08-20', company_id: companyId, companies: { id: companyId, name: companyName } }
+  };
+}
+
+describe('getProductDetail', () => {
+  beforeEach(() => {
+    mockData = { data: [], error: null, count: 0 };
+    query = createQueryMock();
+  });
+
+  it('aynı ürünün farklı firma+marka kombinasyonlarını ayrı satır olarak gruplar', async () => {
+    mockData = {
+      data: [
+        detailRow({ marka: 'X', companyId: 10, companyName: 'FIRMA A', productId: 1, productName: 'DANA', unit: 'kg', quantity: 5, uygunluk: 'uygun' }),
+        detailRow({ marka: 'Y', companyId: 10, companyName: 'FIRMA A', productId: 1, productName: 'DANA', unit: 'kg', quantity: 3, uygunluk: 'uygun' }),
+        detailRow({ marka: 'X', companyId: 20, companyName: 'FIRMA B', productId: 1, productName: 'DANA', unit: 'kg', quantity: 2, uygunluk: 'uygun' })
+      ],
+      count: 3,
+      error: null
+    };
+    const { rows } = await getProductDetail(1);
+    expect(rows).toHaveLength(3);
+  });
+
+  it('aynı firma+marka kombinasyonuna ait birden fazla satırı toplar', async () => {
+    mockData = {
+      data: [
+        detailRow({ marka: 'X', companyId: 10, companyName: 'FIRMA A', productId: 1, productName: 'DANA', unit: 'kg', quantity: 5, uygunluk: 'uygun' }),
+        detailRow({ marka: 'X', companyId: 10, companyName: 'FIRMA A', productId: 1, productName: 'DANA', unit: 'kg', quantity: 3, uygunluk: 'uygun' })
+      ],
+      count: 2,
+      error: null
+    };
+    const { rows } = await getProductDetail(1);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].totalKg).toBe(8);
+  });
+
+  it('marka boşsa (null) "-" olarak döner', async () => {
+    mockData = {
+      data: [detailRow({ marka: null, companyId: 10, companyName: 'FIRMA A', productId: 1, productName: 'DANA', unit: 'kg', quantity: 5, uygunluk: 'uygun' })],
+      count: 1,
+      error: null
+    };
+    const { rows } = await getProductDetail(1);
+    expect(rows[0].marka).toBe('-');
+  });
+
+  it('product_id filtresini uygular', async () => {
+    await getProductDetail(42);
+    expect(query.eq).toHaveBeenCalledWith('product_id', 42);
+    expect(query.eq).toHaveBeenCalledWith('receipts.status', 'onaylandi');
+  });
+
+  it('sonuçları Toplam Kg\'ye göre azalan sıralar', async () => {
+    mockData = {
+      data: [
+        detailRow({ marka: 'AZ', companyId: 10, companyName: 'AZ FIRMA', productId: 1, productName: 'DANA', unit: 'kg', quantity: 2, uygunluk: 'uygun' }),
+        detailRow({ marka: 'COK', companyId: 20, companyName: 'COK FIRMA', productId: 1, productName: 'DANA', unit: 'kg', quantity: 50, uygunluk: 'uygun' })
+      ],
+      count: 2,
+      error: null
+    };
+    const { rows } = await getProductDetail(1);
+    expect(rows.map((r) => r.marka)).toEqual(['COK', 'AZ']);
+  });
+
+  it('count dönen satır sayısından büyükse truncated=true döner', async () => {
+    mockData = {
+      data: [detailRow({ marka: 'X', companyId: 10, companyName: 'FIRMA A', productId: 1, productName: 'DANA', unit: 'kg', quantity: 5, uygunluk: 'uygun' })],
+      count: 50,
+      error: null
+    };
+    const { truncated } = await getProductDetail(1);
+    expect(truncated).toBe(true);
+  });
+});
+
+describe('getCompanyDetail', () => {
+  beforeEach(() => {
+    mockData = { data: [], error: null, count: 0 };
+    query = createQueryMock();
+  });
+
+  it('aynı firmanın farklı ürün+marka kombinasyonlarını ayrı satır olarak gruplar', async () => {
+    mockData = {
+      data: [
+        detailRow({ marka: 'X', companyId: 10, companyName: 'FIRMA A', productId: 1, productName: 'DANA', unit: 'kg', quantity: 5, uygunluk: 'uygun' }),
+        detailRow({ marka: 'X', companyId: 10, companyName: 'FIRMA A', productId: 2, productName: 'TAVUK', unit: 'kg', quantity: 3, uygunluk: 'uygun' })
+      ],
+      count: 2,
+      error: null
+    };
+    const { rows } = await getCompanyDetail(10);
+    expect(rows).toHaveLength(2);
+  });
+
+  it('company_id filtresini uygular', async () => {
+    await getCompanyDetail(7);
+    expect(query.eq).toHaveBeenCalledWith('receipts.company_id', 7);
+    expect(query.eq).toHaveBeenCalledWith('receipts.status', 'onaylandi');
+  });
+
+  it('red sayısını doğru hesaplar', async () => {
+    mockData = {
+      data: [detailRow({ marka: 'X', companyId: 10, companyName: 'FIRMA A', productId: 1, productName: 'DANA', unit: 'kg', quantity: 5, uygunluk: 'uygun_degil' })],
+      count: 1,
+      error: null
+    };
+    const { rows } = await getCompanyDetail(10);
+    expect(rows[0].rejectedCount).toBe(1);
   });
 });
