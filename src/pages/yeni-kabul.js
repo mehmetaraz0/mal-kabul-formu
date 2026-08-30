@@ -49,7 +49,7 @@ export async function renderYeniKabul(container) {
     </div>
 
     <div class="card">
-      <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+      <div class="card-header">
         <div class="card-header-title">📦 Ürünler</div>
         <button type="button" id="urun-ekle-btn" class="btn-accent">+ Ürün Ekle</button>
       </div>
@@ -102,7 +102,7 @@ export async function renderYeniKabul(container) {
           <div class="field"><label class="field-label">Marka</label><input type="text" data-field="marka" data-index="${i}" value="${escapeHtml(item.marka)}" placeholder="Opsiyonel" /></div>
         </div>
         <div class="field">
-          <label class="field-label" style="flex-direction:row;align-items:center;gap:0.4rem;">
+          <label class="field-label" style="display:flex;flex-direction:row;align-items:center;gap:0.4rem;">
             <input type="checkbox" data-field="yariOmurGecti" data-index="${i}" ${item.yariOmurGecti ? 'checked' : ''} /> Yarı Ömrünü Geçti mi
           </label>
         </div>
@@ -132,6 +132,7 @@ export async function renderYeniKabul(container) {
     });
 
     wrap.querySelectorAll('input[type="checkbox"]').forEach((input) => {
+      if (!input.dataset.field) return;
       input.addEventListener('change', () => {
         const idx = Number(input.dataset.index);
         state.items[idx][input.dataset.field] = input.checked;
@@ -188,7 +189,7 @@ export async function renderYeniKabul(container) {
       return;
     }
     // items.length===0: `state.items.some(...)` bir sonraki kontrolde boş dizide HER ZAMAN
-    // false döner, yani "en az bir satır var mı" hiç ayrıca kontrol edilmiyordu — RPC'nin kendi
+    // false döner, yani "en az bir kart var mı" hiç ayrıca kontrol edilmiyordu — RPC'nin kendi
     // 'En az bir ürün satırı gerekli' hatası createReceiptWithItems çağrılmadan, tamamen YEREL
     // olarak (src/lib/receipts.js:26) fırlatılıyordu. Bu, yukarıdaki try/catch'in İÇİNDEYDİ, bu
     // yüzden çevrimdışıyken isNetworkError bunu "ağ hatası" sanıp kuyruğa yazıyordu — kayıt her
@@ -196,7 +197,7 @@ export async function renderYeniKabul(container) {
     // numaralı bulgusunun gözden kaçan üçüncü kontrolü).
     if (state.items.length === 0) {
       msg.style.color = '#b00020';
-      msg.textContent = 'Hata: En az bir ürün satırı gerekli';
+      msg.textContent = 'Hata: En az bir ürün kartı gerekli';
       return;
     }
     if (state.items.some((item) => !item.productId)) {
@@ -206,7 +207,7 @@ export async function renderYeniKabul(container) {
     }
     if (state.items.some((item) => !(item.quantity > 0))) {
       msg.style.color = '#b00020';
-      msg.textContent = "Hata: Tüm satırların miktarı 0'dan büyük olmalı";
+      msg.textContent = "Hata: Tüm kartların miktarı 0'dan büyük olmalı";
       return;
     }
     // Aynı aile: boş tarih de RPC'de sunucu tarafında date cast hatasıyla patlar (çevrimiçiyken
@@ -225,7 +226,7 @@ export async function renderYeniKabul(container) {
     // yakalanmalı (yukarıdaki diğer yerel kontrollerle aynı gerekçe).
     if (sendToQuality && state.items.some((item) => item.uygunluk === 'beklemede')) {
       msg.style.color = '#b00020';
-      msg.textContent = "Hata: Tüm satırların uygunluğu (Uygun / Uygun Değil) işaretlenmeden kaydedilemez";
+      msg.textContent = "Hata: Tüm kartların uygunluğu (Uygun / Uygun Değil) işaretlenmeden kaydedilemez";
       return;
     }
 
@@ -247,7 +248,7 @@ export async function renderYeniKabul(container) {
         irsaliyeNo: container.querySelector('#kabul-irsaliye').value,
         receivedBy: profile.id,
         // Derin kopya (öğe başına yeni nesne): aşağıdaki `await enqueueReceipt(...)` sırasında
-        // kullanıcı tabloda başka bir satırı düzenlerse (input change event'i state.items'ı
+        // kullanıcı kartlarda başka bir kartı düzenlerse (input change event'i state.items'ı
         // doğrudan mutasyona uğratıyor), kuyruğa zaten yazılmış olan payload'ın sessizce
         // değişmesini engeller — kuyruktaki kayıt, "Taslak Kaydet"e basıldığı andaki değerleri
         // donuk (immutable) olarak saklamalı.

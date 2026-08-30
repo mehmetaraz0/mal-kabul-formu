@@ -158,7 +158,7 @@ describe('yeni-kabul save() - yerel doğrulama vs. çevrimdışı kuyruğa yazma
     await flushAsync();
 
     const msg = container.querySelector('#kabul-msg');
-    expect(msg.textContent).toBe("Hata: Tüm satırların miktarı 0'dan büyük olmalı");
+    expect(msg.textContent).toBe("Hata: Tüm kartların miktarı 0'dan büyük olmalı");
     expect(createReceiptWithItems).not.toHaveBeenCalled();
     expect(enqueueReceipt).not.toHaveBeenCalled();
   });
@@ -254,7 +254,7 @@ describe('yeni-kabul ürün kartları', () => {
     expect(createReceiptWithItems).not.toHaveBeenCalled();
   });
 
-  it('varsayılan tek kart "Kartı Sil" ile kaldırılıp 0 kart kalırsa "Kaydet" "en az bir ürün satırı" yerel hatasını gösterir, RPC\'ye gitmez', async () => {
+  it('varsayılan tek kart "Kartı Sil" ile kaldırılıp 0 kart kalırsa "Kaydet" "en az bir ürün kartı" yerel hatasını gösterir, RPC\'ye gitmez', async () => {
     selectFirstFromSearchList(container, 'firma-picker');
     // Sayfa açılışında zaten var olan tek (varsayılan) kart siliniyor -> state.items === [].
     container.querySelector('[data-remove-card="0"]').click();
@@ -264,7 +264,27 @@ describe('yeni-kabul ürün kartları', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const msg = container.querySelector('#kabul-msg');
-    expect(msg.textContent).toBe('Hata: En az bir ürün satırı gerekli');
+    expect(msg.textContent).toBe('Hata: En az bir ürün kartı gerekli');
     expect(createReceiptWithItems).not.toHaveBeenCalled();
+  });
+
+  it('kart içindeki ürün arama popup\'u varsayılan olarak gizlidir', () => {
+    const results = container.querySelector('.urun-arama[data-index="0"] .search-results');
+    expect(results.style.display).toBe('none');
+  });
+
+  it('kart içindeki Marka alanı createReceiptWithItems çağrısına geçer', async () => {
+    selectFirstFromSearchList(container, 'firma-picker');
+    addFirstProductRow(container);
+    const markaInput = container.querySelector('#urun-kartlari input[data-field="marka"][data-index="0"]');
+    markaInput.value = 'Dardanel';
+    markaInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+    container.querySelector('#save-draft-btn').click();
+    await flushAsync();
+
+    expect(createReceiptWithItems).toHaveBeenCalledTimes(1);
+    const payload = createReceiptWithItems.mock.calls[0][0];
+    expect(payload.items[0].marka).toBe('Dardanel');
   });
 });

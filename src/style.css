@@ -81,6 +81,7 @@ input:focus, select:focus {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(30, 58, 95, 0.12);
 }
+input[type="checkbox"] { width: auto; }
 
 .field { display: flex; flex-direction: column; gap: 0.3rem; margin-bottom: 0.9rem; }
 .field-label {
