@@ -94,7 +94,10 @@ export async function buildMalKabulWorkbook(receiptsWithItems, templateArrayBuff
       // Not sütunu koşulsuz gösterilir — PDF/print çıktısıyla aynı (kalite ekibi
       // uygun/beklemede satırına da not girebiliyor, kalite-onay.js'te bir kısıt yok).
       sheet.getCell(`N${row}`).value = item.note || '-';
-      // O{row}:P{row} (İmzalar) bilerek boş bırakılıyor — ıslak imza için.
+      // İmzalar (O:P) artık ıslak imza için boş bırakılmıyor — kaydı oluşturanın adı tek
+      // birleştirilmiş hücreye yazılıyor (kullanıcı isteği, fiziksel imza alanı kalkıyor).
+      sheet.mergeCells(`O${row}:P${row}`);
+      sheet.getCell(`O${row}`).value = receipt.receivedByName || '-';
     });
 
     // Şablonun workbook seviyesindeki görsel ayarlarını (tema, görünüm, özellikler)

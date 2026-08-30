@@ -123,19 +123,24 @@ describe('buildMalKabulWorkbook', () => {
   it('şablonun başlık/lejant metnini ve birleştirilmiş hücrelerini her sayfada korur', async () => {
     const items = Array.from({ length: 14 }, (_, i) => ornekOge({ lot_no: `LOT-${i}` }));
     const wb = await buildMalKabulWorkbook([{ receipt: ornekReceipt(), items }], await sablon());
-    for (const ws of wb.worksheets) {
+    // Sayfa 1: 13 dolu veri satırı (tam dolu), Sayfa 2: 1 dolu veri satırı (14. öğe taştı) —
+    // her dolu satır için İmzalar (O:P) ayrıca birleştirildiğinden şablondaki 21 sabit
+    // birleştirmeye eklenen dolu-satır sayısı kadar merge daha bekleniyor.
+    const doluSatirSayisi = [13, 1];
+    wb.worksheets.forEach((ws, i) => {
       expect(ws.getCell('C1').value).toBe('MAL KABUL FORMU');
       expect(ws.getCell('A3').value).toBe('Tarih');
       expect(ws.getCell('M3').value).toBe('MKK');
       expect(ws.getCell('A29').value).toBe('Doküman No:F.22');
       expect(String(ws.getCell('A19').value)).toContain('UYGUN');
-      // Şablondaki 21 birleştirilmiş hücre aralığı korunmalı.
-      expect(Object.keys(ws._merges)).toHaveLength(21);
+      // Şablondaki 21 birleştirilmiş hücre aralığı + her dolu satırın İmzalar (O:P)
+      // birleştirmesi korunmalı.
+      expect(Object.keys(ws._merges)).toHaveLength(21 + doluSatirSayisi[i]);
       // Başlık dolgusu ve veri hücresi kenarlığı şablondan gelmeli.
       expect(ws.getCell('A3').fill.fgColor.argb).toBe('FFD6E5F3');
       expect(ws.getCell('A5').border.left.style).toBe('thin');
       expect(ws.getCell('A5').font.name).toBe('Times New Roman');
-    }
+    });
   });
 
   it('şablonun workbook seviyesindeki media koleksiyonunu korur', async () => {
@@ -267,5 +272,23 @@ describe('buildMalKabulWorkbook', () => {
     expect(tekrar.worksheets[1].getCell('A3').value).toBe('Tarih');
     expect(tekrar.worksheets[1].getCell('A3').fill.fgColor.argb).toBe('FFD6E5F3');
     expect(tekrar.worksheets[1].pageSetup.orientation).toBe('landscape');
+  });
+
+  it('İmzalar hücresine (O:P birleştirilmiş) kaydı oluşturanın adını yazar', async () => {
+    const wb = await buildMalKabulWorkbook(
+      [{ receipt: ornekReceipt({ receivedByName: 'Depo Kişisi' }), items: [ornekOge()] }],
+      await sablon()
+    );
+    const sheet = wb.worksheets[0];
+    expect(sheet.getCell('O5').value).toBe('Depo Kişisi');
+    expect(sheet.model.merges).toContain('O5:P5');
+  });
+
+  it('receivedByName yoksa İmzalar hücresine "-" yazar', async () => {
+    const wb = await buildMalKabulWorkbook(
+      [{ receipt: ornekReceipt({ receivedByName: undefined }), items: [ornekOge()] }],
+      await sablon()
+    );
+    expect(wb.worksheets[0].getCell('O5').value).toBe('-');
   });
 });

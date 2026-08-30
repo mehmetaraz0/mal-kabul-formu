@@ -67,7 +67,7 @@ export async function renderMalKabulCiktisi(container) {
               <td>${item.unit === 'ad' ? item.quantity : ''}</td>
               <td>${mkkSembolu(item.uygunluk)}</td>
               <td>${escapeHtml(item.note || '-')}</td>
-              <td></td>
+              <td>${escapeHtml(receipt.receivedByName || '-')}</td>
             </tr>`
             )
             .join('')}
