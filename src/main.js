@@ -16,6 +16,7 @@ import { registerRoute, startRouter, navigate, resetRoutes } from './router.js';
 import { renderOfflineBanner, refreshOfflineBanner } from './components/offline-banner.js';
 import { syncQueuedReceipts } from './lib/offline-queue.js';
 import { registerSW } from 'virtual:pwa-register';
+import { startUpdateChecks } from './lib/sw-update.js';
 
 const app = document.querySelector('#app');
 
@@ -73,6 +74,12 @@ const updateSW = registerSW({
   immediate: true,
   onNeedRefresh() {
     showUpdatePrompt(() => updateSW(true));
+  },
+  // Sekme günlerce açık kalabildiği için periyodik güncelleme kontrolü şart: onsuz
+  // onNeedRefresh yalnızca sayfa yeniden yüklenirse tetiklenir ve güncelleme çubuğu
+  // pratikte hiç görünmez (bkz. src/lib/sw-update.js).
+  onRegisteredSW(_swUrl, registration) {
+    startUpdateChecks(registration);
   }
 });
 
