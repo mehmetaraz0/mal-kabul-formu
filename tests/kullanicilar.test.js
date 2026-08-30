@@ -75,3 +75,22 @@ describe('kullanicilar sayfası', () => {
     expect(msg.textContent).toBe('Hata: Bu kullanıcı adı zaten kayıtlı');
   });
 });
+
+describe('kullanicilar tablosu — telefon tasmasi', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // Diger dort veri tablosu overflow-x:auto sarmalayicisi icinde; bu tablo degildi ve
+  // uzun "Kendi hesabiniz — rolunuzu buradan degistiremezsiniz" metni dar ekranda sayfanin
+  // TAMAMINI yana tasiyabiliyordu. Sarmalayici tasmayi tablonun kendi kutusuna hapseder.
+  it('tablo overflow-x:auto sarmalayicisi icinde render edilir', async () => {
+    listUsers.mockResolvedValue([{ id: 'u1', full_name: 'Test Kullanici', role: 'depo_yonetici' }]);
+    getCurrentProfile.mockResolvedValue({ id: 'admin1', full_name: 'Admin', role: 'admin' });
+
+    const container = document.createElement('div');
+    await renderKullanicilar(container);
+
+    const table = container.querySelector('table.card-table');
+    expect(table).not.toBeNull();
+    expect(table.parentElement.style.overflowX).toBe('auto');
+  });
+});

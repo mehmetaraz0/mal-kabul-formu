@@ -15,6 +15,7 @@ export async function renderKullanicilar(container) {
   container.innerHTML = `
     <div class="card">
       <div class="card-header"><div class="card-header-title">👥 Kullanıcılar</div></div>
+      <div style="overflow-x:auto;">
       <table class="card-table">
         <thead><tr><th>Ad Soyad</th><th>Rol</th></tr></thead>
         <tbody id="users-body">
@@ -39,6 +40,7 @@ export async function renderKullanicilar(container) {
             .join('')}
         </tbody>
       </table>
+      </div>
       <p id="users-msg"></p>
     </div>
     <div class="card">
