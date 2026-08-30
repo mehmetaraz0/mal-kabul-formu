@@ -110,8 +110,45 @@ describe('arama sayfası — telefon kart düzeni', () => {
 
   it('firma hücresi kart başlığı olarak işaretlenir', async () => {
     const container = await render();
-    expect(container.querySelector('tbody td.card-title')).not.toBeNull();
-    expect(container.querySelector('tbody td.card-title').textContent).toContain('TEST FIRMA');
+    // Sinif adi `card-title` degil `stacked-title`: `card-title` global ad alaninda mevcut
+    // `.card-header-title`'a bir kelime mesafedeydi; ileride yazilacak global bir `.card-title`
+    // kurali masaustundeki Firma hucresini sessizce etkileyebilirdi.
+    expect(container.querySelector('tbody td.card-title')).toBeNull();
+    expect(container.querySelector('tbody td.stacked-title')).not.toBeNull();
+    expect(container.querySelector('tbody td.stacked-title').textContent).toContain('TEST FIRMA');
+  });
+
+  // Onceki iddia pozisyoneldi: thead ve data-label ayni diziden uretildigi icin ikisi birlikte
+  // kayarsa (ornegin RESULT_COLUMNS'ta iki sutun yer degistirir ama satir sablonu siralanmazsa)
+  // test yesil kalirdi. Bu, etiketin DOGRU veriye bagli oldugunu dogruluyor.
+  it('etiketler doğru değerlerle eşleşir (pozisyonel kayma regresyonu)', async () => {
+    const container = await render();
+    const bul = (etiket) => container.querySelector(`tbody td[data-label="${etiket}"]`).textContent.trim();
+
+    expect(bul('Tarih')).toBe('2026-08-30');
+    expect(bul('Kaydeden')).toBe('mehmet turan araz');
+    expect(bul('İrsaliye No')).toBe('IRS-1');
+  });
+
+  // Kart basliginda ::before etiketi bilerek gizli (gorsel olarak baslik gibi dursun diye),
+  // bu yuzden ekran okuyucu firma adini baglamsiz okuyordu. Gorsel olarak gizli bir etiket
+  // bu boslugu kapatir.
+  it('kart başlığı ekran okuyucu için etiketlenir', async () => {
+    const container = await render();
+    const baslik = container.querySelector('tbody td.stacked-title');
+    const srEtiket = baslik.querySelector('.sr-only');
+
+    expect(srEtiket).not.toBeNull();
+    expect(srEtiket.textContent).toContain('Firma');
+    expect(baslik.textContent).toContain('TEST FIRMA');
+  });
+
+  it('boş sonuç satırının colspan değeri RESULT_COLUMNS uzunluğundan türetilir', async () => {
+    const container = await render([]);
+    const basliklar = container.querySelectorAll('thead th').length;
+    // Sabit "5" yerine turetilmis olmali: bir sutun eklenirse ikisi birlikte degismeli.
+    expect(container.querySelector('tbody td').getAttribute('colspan')).toBe(String(basliklar));
+    expect(basliklar).toBe(5);
   });
 });
 

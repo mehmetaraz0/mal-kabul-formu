@@ -228,6 +228,11 @@ table.card-table td {
    karşılaştırılabilsin (bkz. docs/superpowers/specs/2026-08-30-telefon-responsive-tablolar-design.md).
    `num` sınıfı bilerek kullanılıyor: sayısal sütunların konumu sayfadan sayfaya değiştiği
    için :nth-child tabanlı bir kural kırılgan olurdu. */
+/* Yalnızca ekran okuyucuya yönelik etiketler. Varsayılan olarak KAPALI: masaüstünde tablo
+   başlıkları (<th>) bağlamı zaten veriyor, ikinci bir etiket gereksiz tekrar olurdu. Telefon
+   bloğunda (thead gizliyken) görsel olarak gizli ama seslendirilir hale getiriliyor. */
+.sr-only { display: none; }
+
 @media screen and (max-width: 640px) {
   table.card-table th { padding: 0.35rem 0.4rem; }
   table.card-table td {
@@ -270,19 +275,40 @@ table.card-table td {
     color: var(--color-label);
     flex-shrink: 0;
   }
-  /* Firma adı kartın başlığı: etiketsiz, tam genişlik, vurgulu. */
-  table.card-table.stacked td.card-title {
+  /* Firma adı kartın başlığı: görsel olarak etiketsiz, tam genişlik, vurgulu.
+     Sınıf adı bilerek `stacked-title` — `card-title` global ad alanında mevcut
+     `.card-header-title`'a bir kelime mesafedeydi ve ileride yazılacak global bir
+     `.card-title` kuralı masaüstündeki Firma hücresini sessizce etkileyebilirdi. */
+  table.card-table.stacked td.stacked-title {
     display: block;
     font-weight: 700;
     font-size: 1rem;
     margin-bottom: 0.4rem;
   }
-  table.card-table.stacked td.card-title::before { content: none; }
+  table.card-table.stacked td.stacked-title::before { content: none; }
+  /* Kart başlığının ekran okuyucu etiketi: yalnızca thead'in gizli olduğu bu genişlikte
+     gerekli. Masaüstünde <th>Firma</th> aynı bağlamı zaten veriyor, o yüzden orada
+     tamamen kapalı (yukarıdaki global `.sr-only { display: none }`). */
+  .sr-only {
+    display: block;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
   /* Çıktı butonu: etiketi boş, tam genişlik. */
   table.card-table.stacked td:last-child { padding-top: 0.6rem; }
   table.card-table.stacked td:last-child::before { content: none; }
   table.card-table.stacked td:last-child button { width: 100%; }
-  /* "Sonuç bulunamadı" tek hücreli satır kart gibi görünmesin. */
+  /* "Sonuç bulunamadı" satırında data-label yok; attr() boş string döndürür ve bu,
+     space-between yüzünden metni kartın sağ kenarına iten sıfır genişlikli bir flex
+     öğesi yaratırdı. Etiketi tamamen kaldırıyoruz. (Satır yine kart çerçevesi içinde
+     görünür — tek sonuç satırı olduğu için bu kabul edilebilir.) */
   table.card-table.stacked td[colspan]::before { content: none; }
 }
 

@@ -15,11 +15,11 @@ export async function renderArama(container) {
     <div class="card">
       <div class="card-header"><div class="card-header-title">🔍 Mal Kabul Kayıtlarında Ara</div></div>
       <div style="display:flex;gap:0.5rem;flex-wrap:wrap;align-items:end;">
-        <div class="field" style="min-width:150px;flex:1;">
+        <div class="field" style="min-width:140px;flex:1;">
           <label class="field-label" for="filter-company">Firma</label>
           <select id="filter-company"><option value="">Tümü</option>${companies.map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)}</option>`).join('')}</select>
         </div>
-        <div class="field" style="min-width:150px;flex:1;">
+        <div class="field" style="min-width:140px;flex:1;">
           <label class="field-label" for="filter-product">Ürün</label>
           <select id="filter-product"><option value="">Tümü</option>${products.map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.code)} — ${escapeHtml(p.name)}</option>`).join('')}</select>
         </div>
@@ -62,14 +62,14 @@ export async function renderArama(container) {
       lastResults = await listReceipts(currentFilters());
       const tbody = container.querySelector('#results-body');
       if (lastResults.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5">Sonuç bulunamadı.</td></tr>';
+        tbody.innerHTML = `<tr><td colspan="${RESULT_COLUMNS.length}">Sonuç bulunamadı.</td></tr>`;
         return;
       }
       tbody.innerHTML = lastResults
         .map(
           (r) => `<tr>
             <td data-label="${escapeHtml(RESULT_COLUMNS[0])}">${escapeHtml(r.receipt_date)}</td>
-            <td data-label="${escapeHtml(RESULT_COLUMNS[1])}" class="card-title">${escapeHtml(r.companies.name)}</td>
+            <td data-label="${escapeHtml(RESULT_COLUMNS[1])}" class="stacked-title"><span class="sr-only">${escapeHtml(RESULT_COLUMNS[1])}: </span>${escapeHtml(r.companies.name)}</td>
             <td data-label="${escapeHtml(RESULT_COLUMNS[2])}">${escapeHtml(r.received_profile?.full_name || '-')}</td>
             <td data-label="${escapeHtml(RESULT_COLUMNS[3])}">${escapeHtml(r.irsaliye_no || '-')}</td>
             <td data-label="${escapeHtml(RESULT_COLUMNS[4])}"><button data-view="${escapeHtml(r.id)}">Çıktı</button></td>
