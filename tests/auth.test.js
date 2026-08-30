@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { hasRole } from '../src/lib/role.js';
+import { hasRole, hasAnyRole } from '../src/lib/role.js';
 
 const { mockGetSession, mockSingle } = vi.hoisted(() => ({
   mockGetSession: vi.fn(),
@@ -35,6 +35,24 @@ describe('hasRole', () => {
 
   it('profil null ise false döner', () => {
     expect(hasRole(null, 'kalite_ekibi')).toBe(false);
+  });
+});
+
+describe('hasAnyRole', () => {
+  it('profil rolü listede varsa true döner', () => {
+    expect(hasAnyRole({ role: 'admin' }, ['admin', 'depo_yonetici'])).toBe(true);
+  });
+
+  it('profil rolü listede yoksa false döner', () => {
+    expect(hasAnyRole({ role: 'kalite_ekibi' }, ['admin', 'depo_yonetici'])).toBe(false);
+  });
+
+  it('profil null ise false döner', () => {
+    expect(hasAnyRole(null, ['admin'])).toBe(false);
+  });
+
+  it('boş rol listesiyle her zaman false döner', () => {
+    expect(hasAnyRole({ role: 'admin' }, [])).toBe(false);
   });
 });
 
