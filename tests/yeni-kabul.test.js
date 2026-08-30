@@ -253,4 +253,18 @@ describe('yeni-kabul ürün kartları', () => {
     expect(msg.textContent).toContain('ürün seçilmeli');
     expect(createReceiptWithItems).not.toHaveBeenCalled();
   });
+
+  it('varsayılan tek kart "Kartı Sil" ile kaldırılıp 0 kart kalırsa "Kaydet" "en az bir ürün satırı" yerel hatasını gösterir, RPC\'ye gitmez', async () => {
+    selectFirstFromSearchList(container, 'firma-picker');
+    // Sayfa açılışında zaten var olan tek (varsayılan) kart siliniyor -> state.items === [].
+    container.querySelector('[data-remove-card="0"]').click();
+    expect(container.querySelectorAll('#urun-kartlari > .card')).toHaveLength(0);
+
+    container.querySelector('#save-draft-btn').click();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const msg = container.querySelector('#kabul-msg');
+    expect(msg.textContent).toBe('Hata: En az bir ürün satırı gerekli');
+    expect(createReceiptWithItems).not.toHaveBeenCalled();
+  });
 });
