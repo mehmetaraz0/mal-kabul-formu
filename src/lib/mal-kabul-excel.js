@@ -91,9 +91,9 @@ export async function buildMalKabulWorkbook(receiptsWithItems, templateArrayBuff
       sheet.getCell(`K${row}`).value = item.unit === 'kg' ? item.quantity : '';
       sheet.getCell(`L${row}`).value = item.unit === 'ad' ? item.quantity : '';
       sheet.getCell(`M${row}`).value = mkkSembolu(item.uygunluk);
-      // Not sütunu koşulsuz gösterilir — PDF/print çıktısıyla aynı (kalite ekibi
-      // uygun/beklemede satırına da not girebiliyor, kalite-onay.js'te bir kısıt yok).
-      sheet.getCell(`N${row}`).value = item.note || '-';
+      // Açıklama sütunu artık Not değil marka gösteriyor (kullanıcı isteği) — PDF/print
+      // çıktısıyla aynı davranış.
+      sheet.getCell(`N${row}`).value = item.marka || '-';
       // İmzalar (O:P) artık ıslak imza için boş bırakılmıyor — kaydı oluşturanın adı tek
       // birleştirilmiş hücreye yazılıyor (kullanıcı isteği, fiziksel imza alanı kalkıyor).
       sheet.mergeCells(`O${row}:P${row}`);

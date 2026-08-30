@@ -50,6 +50,7 @@ function ornekOge(overrides = {}) {
     unit: 'kg',
     uygunluk: 'uygun',
     note: null,
+    marka: null,
     ...overrides
   };
 }
@@ -87,22 +88,22 @@ describe('buildMalKabulWorkbook', () => {
     expect(ws.getCell('N5').value).toBe('-');
   });
 
-  it('uygun_degil satırında MKK en-dash, Açıklama not metnini gösterir', async () => {
-    const oge = ornekOge({ uygunluk: 'uygun_degil', note: 'SKT geçmiş' });
+  it('uygun_degil satırında MKK en-dash, Açıklama marka değerini gösterir', async () => {
+    const oge = ornekOge({ uygunluk: 'uygun_degil', marka: 'Dardanel' });
     const wb = await buildMalKabulWorkbook([{ receipt: ornekReceipt(), items: [oge] }], await sablon());
     const ws = wb.worksheets[0];
     expect(ws.getCell('M5').value).toBe('–');
-    expect(ws.getCell('N5').value).toBe('SKT geçmiş');
+    expect(ws.getCell('N5').value).toBe('Dardanel');
   });
 
-  it('uygun (ve beklemede) satırında da not girilmişse Açıklama sütunu koşulsuz gösterir (PDF çıktısıyla aynı davranış)', async () => {
-    const ogeUygun = ornekOge({ uygunluk: 'uygun', note: 'Kutu hafif ezik, ürün etkilenmemiş' });
+  it('uygun (ve beklemede) satırında da marka girilmişse Açıklama sütunu koşulsuz gösterir (PDF çıktısıyla aynı davranış)', async () => {
+    const ogeUygun = ornekOge({ uygunluk: 'uygun', marka: 'Superfresh' });
     const wbUygun = await buildMalKabulWorkbook([{ receipt: ornekReceipt(), items: [ogeUygun] }], await sablon());
-    expect(wbUygun.worksheets[0].getCell('N5').value).toBe('Kutu hafif ezik, ürün etkilenmemiş');
+    expect(wbUygun.worksheets[0].getCell('N5').value).toBe('Superfresh');
 
-    const ogeBeklemede = ornekOge({ uygunluk: 'beklemede', note: 'Kalite ekibi inceliyor' });
+    const ogeBeklemede = ornekOge({ uygunluk: 'beklemede', marka: 'Dardanel' });
     const wbBeklemede = await buildMalKabulWorkbook([{ receipt: ornekReceipt(), items: [ogeBeklemede] }], await sablon());
-    expect(wbBeklemede.worksheets[0].getCell('N5').value).toBe('Kalite ekibi inceliyor');
+    expect(wbBeklemede.worksheets[0].getCell('N5').value).toBe('Dardanel');
   });
 
   it('birim ad ise Adet sütununa, kg ise Kg sütununa yazar', async () => {
