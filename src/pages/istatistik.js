@@ -56,15 +56,21 @@ export async function renderIstatistik(container) {
       const { products, companies, truncated } = await getStatistics({ startDate, endDate });
       container.querySelector('#istatistik-products').innerHTML = renderTable(products, 'Ürün Adı');
       container.querySelectorAll('#istatistik-products [data-detay]').forEach((btn) => {
-        btn.addEventListener('click', () =>
-          navigate('/istatistik-urun-detay?id=' + btn.dataset.detay + '&name=' + encodeURIComponent(btn.dataset.name))
-        );
+        btn.addEventListener('click', () => {
+          let url = '/istatistik-urun-detay?id=' + btn.dataset.detay + '&name=' + encodeURIComponent(btn.dataset.name);
+          if (startDate) url += '&start=' + startDate;
+          if (endDate) url += '&end=' + endDate;
+          navigate(url);
+        });
       });
       container.querySelector('#istatistik-companies').innerHTML = renderTable(companies, 'Firma Adı');
       container.querySelectorAll('#istatistik-companies [data-detay]').forEach((btn) => {
-        btn.addEventListener('click', () =>
-          navigate('/istatistik-firma-detay?id=' + btn.dataset.detay + '&name=' + encodeURIComponent(btn.dataset.name))
-        );
+        btn.addEventListener('click', () => {
+          let url = '/istatistik-firma-detay?id=' + btn.dataset.detay + '&name=' + encodeURIComponent(btn.dataset.name);
+          if (startDate) url += '&start=' + startDate;
+          if (endDate) url += '&end=' + endDate;
+          navigate(url);
+        });
       });
       if (truncated) {
         msg.style.color = '#a15c00';

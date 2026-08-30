@@ -5,6 +5,8 @@ import { escapeHtml } from '../lib/html.js';
 export async function renderIstatistikFirmaDetay(container) {
   const id = getQueryParam('id');
   const name = getQueryParam('name') || '-';
+  const startDate = getQueryParam('start') || undefined;
+  const endDate = getQueryParam('end') || undefined;
   if (!id) {
     container.innerHTML = '<p>Firma bulunamadı.</p>';
     return;
@@ -14,6 +16,7 @@ export async function renderIstatistikFirmaDetay(container) {
     <button class="btn-ghost" id="back-btn">← İstatistiklere Dön</button>
     <div class="card">
       <div class="card-header"><div class="card-header-title">🏢 ${escapeHtml(name)} — Detay</div></div>
+      <p style="margin:0 0 0.5rem;color:var(--color-text-muted, #666);font-size:0.9rem;">${startDate || endDate ? `Tarih aralığı: ${escapeHtml(startDate || '…')} – ${escapeHtml(endDate || '…')}` : 'Tüm zamanlar'}</p>
       <p id="detay-msg"></p>
       <div id="detay-table"></div>
     </div>
@@ -22,7 +25,7 @@ export async function renderIstatistikFirmaDetay(container) {
 
   const msg = container.querySelector('#detay-msg');
   try {
-    const { rows, truncated } = await getCompanyDetail(id);
+    const { rows, truncated } = await getCompanyDetail(id, { startDate, endDate });
     const table = container.querySelector('#detay-table');
     if (rows.length === 0) {
       table.innerHTML = '<p>Kayıt bulunamadı.</p>';

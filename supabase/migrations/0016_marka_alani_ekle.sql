@@ -79,3 +79,17 @@ begin
   return v_receipt_id;
 end;
 $$;
+
+-- 0013'ten miras kalan bir eksiklik kapatılıyor: 0013 bu fonksiyonu DROP+CREATE ettiği için
+-- (imza değiştiği için gerekliydi) fonksiyonun execute ACL'i sıfırlanmış ve PUBLIC'e
+-- (dolayısıyla anon'a) açık kalmıştı — 0007/0008/0009/0011'in her biri kendi tanımından sonra
+-- bu revoke/grant'i tekrar uyguluyordu, 0013 bunu atlamıştı. Fonksiyon zaten security invoker
+-- olduğu için RLS pratikte anon'u engelliyordu, ama proje "anon bu fonksiyonu hiç çağıramamalı"
+-- ilkesini savunma-derinliği olarak ayrıca uyguluyor; bu migration bu fonksiyona dokunan ilk
+-- migration olduğu için düzeltme burada yapılıyor.
+revoke execute on function create_receipt_with_items(
+  bigint, date, text, uuid, text, jsonb, boolean, text, boolean, numeric
+) from public, anon;
+grant execute on function create_receipt_with_items(
+  bigint, date, text, uuid, text, jsonb, boolean, text, boolean, numeric
+) to authenticated;

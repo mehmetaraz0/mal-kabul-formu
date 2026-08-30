@@ -241,6 +241,14 @@ describe('getProductDetail', () => {
     const { truncated } = await getProductDetail(1);
     expect(truncated).toBe(true);
   });
+
+  it('receipts!inner join ile marka dahil select yapar', async () => {
+    await getProductDetail(1);
+    expect(query.select).toHaveBeenCalledWith(
+      expect.stringMatching(/marka.*receipts!inner|receipts!inner.*marka/),
+      expect.objectContaining({ count: 'exact' })
+    );
+  });
 });
 
 describe('getCompanyDetail', () => {
@@ -276,5 +284,31 @@ describe('getCompanyDetail', () => {
     };
     const { rows } = await getCompanyDetail(10);
     expect(rows[0].rejectedCount).toBe(1);
+  });
+
+  it('receipts!inner join ile marka dahil select yapar', async () => {
+    await getCompanyDetail(1);
+    expect(query.select).toHaveBeenCalledWith(
+      expect.stringMatching(/marka.*receipts!inner|receipts!inner.*marka/),
+      expect.objectContaining({ count: 'exact' })
+    );
+  });
+
+  it('products embed eksikse productName "-" olarak döner', async () => {
+    mockData = {
+      data: [{
+        marka: 'X',
+        quantity: 5,
+        unit: 'kg',
+        uygunluk: 'uygun',
+        product_id: 1,
+        products: null,
+        receipts: { receipt_date: '2026-08-20', company_id: 10, status: 'onaylandi' }
+      }],
+      count: 1,
+      error: null
+    };
+    const { rows } = await getCompanyDetail(10);
+    expect(rows[0].productName).toBe('-');
   });
 });
