@@ -64,6 +64,12 @@ Aggregasyon (toplama) istemci tarafında (JS) yapılır: dönen satırlar `produ
 `company_id`'ye göre gruplanıp `unit`'e göre kg/adet ayrı toplanır, `uygunluk === 'uygun_degil'`
 olanlar sayılır.
 
+**Durum filtresi**: Sorgu sadece `receipts.status = 'onaylandi'` (onaylanmış/finalize edilmiş)
+kayıtları sayar — `taslak` (Taslak Kaydet ile bırakılmış, tamamlanmamış olabilecek) ve varsa eski
+`reddedildi` kayıtları hariç tutulur. Bu sayfanın amacı "ne kadar mal gerçekten alındı" sorusuna
+cevap vermek; taslak/onaylanmamış kayıtlar henüz fiilen teslim alınmış mal anlamına gelmediğinden
+toplamlara dahil edilmemeli.
+
 ## Frontend
 
 Yeni sayfa `src/pages/istatistik.js`, `renderIstatistik(container)`:

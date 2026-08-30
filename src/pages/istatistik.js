@@ -4,6 +4,7 @@ import { escapeHtml } from '../lib/html.js';
 function renderTable(rows, nameLabel) {
   if (rows.length === 0) return '<p>Kayıt bulunamadı.</p>';
   return `
+    <div style="overflow-x:auto;">
     <table class="card-table">
       <thead><tr><th>${nameLabel}</th><th>Toplam Kg</th><th>Toplam Adet</th><th>Red Sayısı</th></tr></thead>
       <tbody>
@@ -12,14 +13,15 @@ function renderTable(rows, nameLabel) {
             (r) => `
           <tr>
             <td>${escapeHtml(r.name)}</td>
-            <td>${r.totalKg > 0 ? r.totalKg : '-'}</td>
-            <td>${r.totalAdet > 0 ? r.totalAdet : '-'}</td>
+            <td>${r.totalKg > 0 ? Math.round(r.totalKg * 100) / 100 : '-'}</td>
+            <td>${r.totalAdet > 0 ? Math.round(r.totalAdet * 100) / 100 : '-'}</td>
             <td>${r.rejectedCount > 0 ? r.rejectedCount : '-'}</td>
           </tr>`
           )
           .join('')}
       </tbody>
     </table>
+    </div>
   `;
 }
 

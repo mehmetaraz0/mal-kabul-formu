@@ -4,6 +4,7 @@ let mockData = { data: [], error: null };
 
 const createQueryMock = () => ({
   select: vi.fn(function () { return this; }),
+  eq: vi.fn(function () { return this; }),
   gte: vi.fn(function () { return this; }),
   lte: vi.fn(function () { return this; }),
   limit: vi.fn(function () { return this; }),
@@ -119,21 +120,39 @@ describe('getStatistics', () => {
     expect(query.lte).not.toHaveBeenCalled();
   });
 
-  it('dönen satır sayısı tam STATISTICS_ROW_LIMIT\'e eşitse truncated=true döner', async () => {
-    const data = Array.from({ length: STATISTICS_ROW_LIMIT }, (_, i) =>
-      row({ productId: i, productName: 'P' + i, companyId: i, companyName: 'C' + i, unit: 'kg', quantity: 1, uygunluk: 'uygun' })
-    );
-    mockData = { data, error: null };
+  it('count dönen satır sayısından büyükse truncated=true döner (gerçek toplam satır sayısından daha azı alınmış)', async () => {
+    mockData = {
+      data: [row({ productId: 1, productName: 'DANA', companyId: 10, companyName: 'FIRMA A', unit: 'kg', quantity: 5, uygunluk: 'uygun' })],
+      count: 50,
+      error: null
+    };
     const { truncated } = await getStatistics({});
     expect(truncated).toBe(true);
   });
 
-  it('dönen satır sayısı limitin altındaysa truncated=false döner', async () => {
+  it('count dönen satır sayısına eşitse truncated=false döner (hepsi alınmış)', async () => {
     mockData = {
       data: [row({ productId: 1, productName: 'DANA', companyId: 10, companyName: 'FIRMA A', unit: 'kg', quantity: 5, uygunluk: 'uygun' })],
+      count: 1,
       error: null
     };
     const { truncated } = await getStatistics({});
     expect(truncated).toBe(false);
+  });
+
+  it('receipts!inner join ile select yapar ve status="onaylandi" filtresi uygular', async () => {
+    await getStatistics({});
+    expect(query.select).toHaveBeenCalledWith(expect.stringContaining('receipts!inner'), expect.objectContaining({ count: 'exact' }));
+    expect(query.eq).toHaveBeenCalledWith('receipts.status', 'onaylandi');
+  });
+
+  it('STATISTICS_ROW_LIMIT ile limit uygular', async () => {
+    await getStatistics({});
+    expect(query.limit).toHaveBeenCalledWith(STATISTICS_ROW_LIMIT);
+  });
+
+  it('supabase hata dönerse fırlatır', async () => {
+    mockData = { data: null, error: { message: 'network error' } };
+    await expect(getStatistics({})).rejects.toEqual({ message: 'network error' });
   });
 });
