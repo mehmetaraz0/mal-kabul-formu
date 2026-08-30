@@ -57,8 +57,7 @@ export async function renderYeniKabul(container) {
     </div>
 
     <div style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap;">
-      <button id="save-draft-btn" class="btn-ghost">Taslak Kaydet</button>
-      <button id="submit-quality-btn">Kaydet</button>
+      <button id="save-btn">Kaydet</button>
     </div>
     <p id="kabul-msg"></p>
   `;
@@ -171,9 +170,9 @@ export async function renderYeniKabul(container) {
 
   renderUrunKartlari();
 
-  async function save(sendToQuality) {
+  async function save() {
     const msg = container.querySelector('#kabul-msg');
-    const buttons = [container.querySelector('#save-draft-btn'), container.querySelector('#submit-quality-btn')];
+    const buttons = [container.querySelector('#save-btn')];
     msg.textContent = '';
 
     // Yerel doğrulamalar SENKRON ve try/catch'in DIŞINDA çalışır — bilerek. `isNetworkError`,
@@ -220,11 +219,12 @@ export async function renderYeniKabul(container) {
       msg.textContent = 'Hata: Tarih girilmeli';
       return;
     }
-    // Aynı aile: nihai "Kaydet" (sendToQuality=true) veritabanı tarafında da
-    // check_receipt_approval tetikleyicisiyle (0007) reddediliyor — burada erken ve anlaşılır
-    // bir hata için tekrarlanıyor. Çevrimdışıyken bu da RPC'ye hiç gitmeden yerel olarak
-    // yakalanmalı (yukarıdaki diğer yerel kontrollerle aynı gerekçe).
-    if (sendToQuality && state.items.some((item) => item.uygunluk === 'beklemede')) {
+    // Aynı aile: kayıt veritabanı tarafında da check_receipt_approval tetikleyicisiyle (0007)
+    // reddediliyor — burada erken ve anlaşılır bir hata için tekrarlanıyor. Çevrimdışıyken bu da
+    // RPC'ye hiç gitmeden yerel olarak yakalanmalı (yukarıdaki diğer yerel kontrollerle aynı
+    // gerekçe). Taslak kaydetme kaldırıldığı için artık koşulsuz: her kayıt tamamlanmış olarak
+    // yazılır, dolayısıyla her kartın uygunluğu işaretlenmiş olmalı.
+    if (state.items.some((item) => item.uygunluk === 'beklemede')) {
       msg.style.color = '#b00020';
       msg.textContent = "Hata: Tüm kartların uygunluğu (Uygun / Uygun Değil) işaretlenmeden kaydedilemez";
       return;
@@ -233,8 +233,8 @@ export async function renderYeniKabul(container) {
     // Çift gönderim engeli: yavaş bir kayıt sırasında ikinci bir tıklama ikinci bir kayıt yaratmasın.
     buttons.forEach((btn) => { btn.disabled = true; });
     try {
-      // RPC tek çağrıda hem kaydı hem satırları oluşturur, sendToQuality ise aynı transaction
-      // içinde kalite onayına gönderir (öksüz taslak kalmaz).
+      // RPC tek çağrıda hem kaydı hem satırları oluşturur ve aynı transaction içinde kaydı
+      // tamamlanmış duruma taşır (öksüz taslak kalmaz).
       const aracHijyenValue = container.querySelector('#kabul-arac-hijyen').value;
       const aracSicaklikValue = container.querySelector('#kabul-arac-sicaklik').value;
       // clientUuid burada üretiliyor (RPC'nin kendi varsayılanına bırakmak yerine) çünkü ağ
@@ -250,7 +250,7 @@ export async function renderYeniKabul(container) {
         // Derin kopya (öğe başına yeni nesne): aşağıdaki `await enqueueReceipt(...)` sırasında
         // kullanıcı kartlarda başka bir kartı düzenlerse (input change event'i state.items'ı
         // doğrudan mutasyona uğratıyor), kuyruğa zaten yazılmış olan payload'ın sessizce
-        // değişmesini engeller — kuyruktaki kayıt, "Taslak Kaydet"e basıldığı andaki değerleri
+        // değişmesini engeller — kuyruktaki kayıt, "Kaydet"e basıldığı andaki değerleri
         // donuk (immutable) olarak saklamalı.
         items: state.items.map((item) => ({ ...item })),
         faturaNo: container.querySelector('#kabul-fatura').value,
@@ -258,16 +258,16 @@ export async function renderYeniKabul(container) {
         aracSicaklik: aracSicaklikValue ? Number(aracSicaklikValue) : null
       };
       try {
-        await createReceiptWithItems({ ...payload, clientUuid, submitToQuality: sendToQuality });
+        await createReceiptWithItems({ ...payload, clientUuid, submitToQuality: true });
         msg.style.color = 'var(--color-success-text)';
-        msg.textContent = sendToQuality ? 'Kayıt tamamlandı.' : 'Taslak olarak kaydedildi.';
+        msg.textContent = 'Kayıt tamamlandı.';
       } catch (err) {
         // Sadece GERÇEK ağ hataları kuyruğa alınır (bkz. offline-cache.js/isNetworkError).
         // RLS reddi, validasyon hatası gibi uygulama seviyesi hatalar burada yeniden fırlatılıp
         // dıştaki catch'e düşer — aksi halde asla senkronize olamayacak bozuk bir kayıt kuyrukta
         // sonsuza kadar bekler (Global Constraint, plan dokümanı).
         if (!isNetworkError(err)) throw err;
-        await enqueueReceipt({ clientUuid, payload, sendToQuality });
+        await enqueueReceipt({ clientUuid, payload, sendToQuality: true });
         await refreshOfflineBanner();
         msg.style.color = '#a15c00';
         msg.textContent = 'Çevrimdışısınız — kayıt cihazda bekletildi, bağlantı gelince otomatik gönderilecek.';
@@ -284,6 +284,5 @@ export async function renderYeniKabul(container) {
     }
   }
 
-  container.querySelector('#save-draft-btn').addEventListener('click', () => save(false));
-  container.querySelector('#submit-quality-btn').addEventListener('click', () => save(true));
+  container.querySelector('#save-btn').addEventListener('click', () => save());
 }

@@ -84,7 +84,7 @@ describe('yeni-kabul save() - yerel doğrulama vs. çevrimdışı kuyruğa yazma
     // artık "0 satır" değil, "seçilmemiş ürün" yerel doğrulaması devreye giriyor.
 
     Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-    container.querySelector('#save-draft-btn').click();
+    container.querySelector('#save-btn').click();
     await flushAsync();
 
     const msg = container.querySelector('#kabul-msg');
@@ -105,7 +105,7 @@ describe('yeni-kabul save() - yerel doğrulama vs. çevrimdışı kuyruğa yazma
     tarihInput.dispatchEvent(new Event('input', { bubbles: true }));
 
     Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-    container.querySelector('#save-draft-btn').click();
+    container.querySelector('#save-btn').click();
     await flushAsync();
 
     const msg = container.querySelector('#kabul-msg');
@@ -118,12 +118,14 @@ describe('yeni-kabul save() - yerel doğrulama vs. çevrimdışı kuyruğa yazma
     selectFirstFromSearchList(container, 'firma-picker');
     addFirstProductRow(container);
     // #kabul-tarih zaten renderYeniKabul tarafından bugünün tarihiyle önceden dolduruluyor.
+    // Taslak kaydetme kaldırıldığından her kaydın uygunluğu işaretli olmalı.
+    container.querySelector('[data-uygunluk="uygun"][data-index="0"]').click();
 
     Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
     // Gerçek supabase-js şekli: instanceof TypeError DEĞİL, code:'' olan düz nesne.
     createReceiptWithItems.mockRejectedValue({ message: 'TypeError: Failed to fetch', details: '', hint: '', code: '' });
 
-    container.querySelector('#save-draft-btn').click();
+    container.querySelector('#save-btn').click();
     await flushAsync();
 
     expect(createReceiptWithItems).toHaveBeenCalledTimes(1);
@@ -139,7 +141,7 @@ describe('yeni-kabul save() - yerel doğrulama vs. çevrimdışı kuyruğa yazma
   it('regresyon: firma seçilmemişken (mevcut kontrol) hâlâ kuyruğa yazmadan hata gösterir', async () => {
     // state.companyId hiç set edilmedi
     Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-    container.querySelector('#save-draft-btn').click();
+    container.querySelector('#save-btn').click();
     await flushAsync();
 
     const msg = container.querySelector('#kabul-msg');
@@ -154,7 +156,7 @@ describe('yeni-kabul save() - yerel doğrulama vs. çevrimdışı kuyruğa yazma
     // quantity varsayılan olarak 0 bırakılıyor (addFirstProductRow kullanılmadı)
 
     Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
-    container.querySelector('#save-draft-btn').click();
+    container.querySelector('#save-btn').click();
     await flushAsync();
 
     const msg = container.querySelector('#kabul-msg');
@@ -168,7 +170,7 @@ describe('yeni-kabul save() - yerel doğrulama vs. çevrimdışı kuyruğa yazma
     addFirstProductRow(container);
     // uygunluk hiç değiştirilmedi, varsayılan 'beklemede' kaldı.
 
-    container.querySelector('#submit-quality-btn').click();
+    container.querySelector('#save-btn').click();
     await flushAsync();
 
     const msg = container.querySelector('#kabul-msg');
@@ -246,7 +248,7 @@ describe('yeni-kabul ürün kartları', () => {
     const tarihInput = container.querySelector('#kabul-tarih');
     tarihInput.value = tarihInput.value || new Date().toISOString().slice(0, 10);
 
-    container.querySelector('#save-draft-btn').click();
+    container.querySelector('#save-btn').click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const msg = container.querySelector('#kabul-msg');
@@ -260,7 +262,7 @@ describe('yeni-kabul ürün kartları', () => {
     container.querySelector('[data-remove-card="0"]').click();
     expect(container.querySelectorAll('#urun-kartlari > .card')).toHaveLength(0);
 
-    container.querySelector('#save-draft-btn').click();
+    container.querySelector('#save-btn').click();
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     const msg = container.querySelector('#kabul-msg');
@@ -279,12 +281,81 @@ describe('yeni-kabul ürün kartları', () => {
     const markaInput = container.querySelector('#urun-kartlari input[data-field="marka"][data-index="0"]');
     markaInput.value = 'Dardanel';
     markaInput.dispatchEvent(new Event('input', { bubbles: true }));
+    container.querySelector('[data-uygunluk="uygun"][data-index="0"]').click();
 
-    container.querySelector('#save-draft-btn').click();
+    container.querySelector('#save-btn').click();
     await flushAsync();
 
     expect(createReceiptWithItems).toHaveBeenCalledTimes(1);
     const payload = createReceiptWithItems.mock.calls[0][0];
     expect(payload.items[0].marka).toBe('Dardanel');
+  });
+});
+
+describe('yeni-kabul — taslak kaydetme kaldırıldı', () => {
+  let container;
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    getCurrentProfile.mockResolvedValue({ id: 'u1', full_name: 'Depo Yöneticisi', role: 'depo_yonetici' });
+    listCompanies.mockResolvedValue([{ id: 1, name: 'TEST FIRMA' }]);
+    listProducts.mockResolvedValue([{ id: 1, code: 'P1', name: 'URUN 1', unit: 'kg', category: 'ET' }]);
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    await renderYeniKabul(container);
+  });
+
+  afterEach(() => {
+    container.remove();
+    Object.defineProperty(navigator, 'onLine', { value: true, configurable: true });
+  });
+
+  it('"Taslak Kaydet" butonu render edilmez', () => {
+    expect(container.querySelector('#save-draft-btn')).toBeNull();
+    expect(container.textContent).not.toContain('Taslak Kaydet');
+  });
+
+  it('tek bir kaydet butonu vardır', () => {
+    expect(container.querySelector('#save-btn')).not.toBeNull();
+  });
+
+  it('kaydetme her zaman tamamlanmış kayıt olarak gönderilir (submitToQuality: true)', async () => {
+    selectFirstFromSearchList(container, 'firma-picker');
+    addFirstProductRow(container);
+    container.querySelector('[data-uygunluk="uygun"][data-index="0"]').click();
+    createReceiptWithItems.mockResolvedValue('r1');
+
+    container.querySelector('#save-btn').click();
+    await flushAsync();
+
+    expect(createReceiptWithItems).toHaveBeenCalledTimes(1);
+    expect(createReceiptWithItems.mock.calls[0][0]).toMatchObject({ submitToQuality: true });
+    expect(container.querySelector('#kabul-msg').textContent).toBe('Kayıt tamamlandı.');
+  });
+
+  it('çevrimdışı kuyruğa yazılan kayıt da tamamlanmış olarak işaretlenir', async () => {
+    selectFirstFromSearchList(container, 'firma-picker');
+    addFirstProductRow(container);
+    container.querySelector('[data-uygunluk="uygun"][data-index="0"]').click();
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    createReceiptWithItems.mockRejectedValue({ message: 'TypeError: Failed to fetch', details: '', hint: '', code: '' });
+
+    container.querySelector('#save-btn').click();
+    await flushAsync();
+
+    expect(enqueueReceipt).toHaveBeenCalledTimes(1);
+    expect(enqueueReceipt.mock.calls[0][0].sendToQuality).toBe(true);
+  });
+
+  it('uygunluk işaretlenmemişse kaydetmez (taslak kaçış yolu kalmadı)', async () => {
+    selectFirstFromSearchList(container, 'firma-picker');
+    addFirstProductRow(container);
+
+    container.querySelector('#save-btn').click();
+    await flushAsync();
+
+    expect(container.querySelector('#kabul-msg').textContent).toContain('Uygun / Uygun Değil');
+    expect(createReceiptWithItems).not.toHaveBeenCalled();
+    expect(enqueueReceipt).not.toHaveBeenCalled();
   });
 });
