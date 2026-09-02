@@ -16,7 +16,8 @@ export async function renderYeniKabul(container) {
   function emptyItem() {
     return {
       productId: null, code: '', name: '', unit: '', marka: '', lotNo: '', skt: '',
-      quantity: 0, urunSicakligi: '', yariOmurGecti: false, uygunluk: 'beklemede', note: ''
+      quantity: 0, urunSicakligi: '', yariOmurGecti: false, uygunluk: 'beklemede', note: '',
+      dereceMin: null, dereceMax: null
     };
   }
 
@@ -78,6 +79,13 @@ export async function renderYeniKabul(container) {
     aracHijyenBox.dataset.value = e.target.value;
   });
 
+  function updateUygunlukButtons(wrap, idx) {
+    wrap.querySelectorAll(`[data-uygunluk][data-index="${idx}"]`).forEach((b) => {
+      const isActive = b.dataset.uygunluk === state.items[idx].uygunluk;
+      b.className = isActive ? (b.dataset.uygunluk === 'uygun' ? 'btn-success' : 'btn-danger') : 'btn-ghost';
+    });
+  }
+
   function renderUrunKartlari() {
     const wrap = container.querySelector('#urun-kartlari');
     wrap.innerHTML = state.items
@@ -124,7 +132,10 @@ export async function renderYeniKabul(container) {
         getKey: (p) => p.id,
         placeholder: 'Ürün ara...',
         onSelect: (p) => {
-          state.items[i] = { ...state.items[i], productId: p.id, code: p.code, name: p.name, unit: p.unit };
+          state.items[i] = {
+            ...state.items[i], productId: p.id, code: p.code, name: p.name, unit: p.unit,
+            dereceMin: p.derece_min ?? null, dereceMax: p.derece_max ?? null
+          };
           renderUrunKartlari();
         }
       });
@@ -143,16 +154,27 @@ export async function renderYeniKabul(container) {
         const idx = Number(input.dataset.index);
         const field = input.dataset.field;
         state.items[idx][field] = field === 'quantity' ? Number(input.value) : input.value;
+
+        // Sıcaklık girildiğinde, üründe bir referans aralık tanımlıysa Uygunluk'u otomatik
+        // öner — bu bir varsayılan, kullanıcı Uygun/Uygunsuz butonlarına elle tıklayarak
+        // her zaman değiştirebilir (kilit değil).
+        if (field === 'urunSicakligi') {
+          const item = state.items[idx];
+          if (item.dereceMin != null && item.dereceMax != null && input.value !== '') {
+            const sicaklik = Number(input.value);
+            if (!Number.isNaN(sicaklik)) {
+              item.uygunluk = sicaklik >= item.dereceMin && sicaklik <= item.dereceMax ? 'uygun' : 'uygun_degil';
+              updateUygunlukButtons(wrap, idx);
+            }
+          }
+        }
       });
     });
     wrap.querySelectorAll('[data-uygunluk]').forEach((btn) => {
       btn.addEventListener('click', () => {
         const idx = Number(btn.dataset.index);
         state.items[idx].uygunluk = btn.dataset.uygunluk;
-        wrap.querySelectorAll(`[data-uygunluk][data-index="${idx}"]`).forEach((b) => {
-          const isActive = b.dataset.uygunluk === state.items[idx].uygunluk;
-          b.className = isActive ? (b.dataset.uygunluk === 'uygun' ? 'btn-success' : 'btn-danger') : 'btn-ghost';
-        });
+        updateUygunlukButtons(wrap, idx);
       });
     });
     wrap.querySelectorAll('[data-remove-card]').forEach((btn) => {

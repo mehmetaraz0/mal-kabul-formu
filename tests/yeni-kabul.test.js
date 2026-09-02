@@ -188,8 +188,8 @@ describe('yeni-kabul ürün kartları', () => {
     getCurrentProfile.mockResolvedValue({ id: 'u1', full_name: 'Depo Yöneticisi', role: 'depo_yonetici' });
     listCompanies.mockResolvedValue([{ id: 1, name: 'TEST FIRMA' }]);
     listProducts.mockResolvedValue([
-      { id: 1, code: 'P1', name: 'DANA KUŞBAŞI', unit: 'kg', category: 'ET' },
-      { id: 2, code: 'P2', name: 'TAVUK BUT', unit: 'kg', category: 'ET' }
+      { id: 1, code: 'P1', name: 'DANA KUŞBAŞI', unit: 'kg', category: 'ET', derece_min: -22, derece_max: -16 },
+      { id: 2, code: 'P2', name: 'TAVUK BUT', unit: 'kg', category: 'ET', derece_min: null, derece_max: null }
     ]);
 
     container = document.createElement('div');
@@ -289,6 +289,70 @@ describe('yeni-kabul ürün kartları', () => {
     expect(createReceiptWithItems).toHaveBeenCalledTimes(1);
     const payload = createReceiptWithItems.mock.calls[0][0];
     expect(payload.items[0].marka).toBe('Dardanel');
+  });
+
+  it('referans aralığı olan bir üründe, aralık İÇİNDE bir sıcaklık girilince Uygunluk otomatik "uygun" olur', () => {
+    const input = container.querySelector('.urun-arama[data-index="0"] .search-input');
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    container.querySelector('.urun-arama[data-index="0"] .search-results li').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    const sicaklikInput = container.querySelector('input[data-field="urunSicakligi"][data-index="0"]');
+    sicaklikInput.value = '-18';
+    sicaklikInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const uygunBtn = container.querySelector('[data-uygunluk="uygun"][data-index="0"]');
+    expect(uygunBtn.className).toContain('btn-success');
+  });
+
+  it('referans aralığı olan bir üründe, aralık DIŞINDA bir sıcaklık girilince Uygunluk otomatik "uygun_degil" olur', () => {
+    const input = container.querySelector('.urun-arama[data-index="0"] .search-input');
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    container.querySelector('.urun-arama[data-index="0"] .search-results li').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    const sicaklikInput = container.querySelector('input[data-field="urunSicakligi"][data-index="0"]');
+    sicaklikInput.value = '-10';
+    sicaklikInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const uygunsuzBtn = container.querySelector('[data-uygunluk="uygun_degil"][data-index="0"]');
+    expect(uygunsuzBtn.className).toContain('btn-danger');
+  });
+
+  it('otomatik seçim sonrası kullanıcı elle farklı bir Uygunluk seçebilir', () => {
+    const input = container.querySelector('.urun-arama[data-index="0"] .search-input');
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    container.querySelector('.urun-arama[data-index="0"] .search-results li').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    const sicaklikInput = container.querySelector('input[data-field="urunSicakligi"][data-index="0"]');
+    sicaklikInput.value = '-10'; // aralık dışı -> otomatik uygun_degil olur
+    sicaklikInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const uygunBtn = container.querySelector('[data-uygunluk="uygun"][data-index="0"]');
+    uygunBtn.click(); // kullanıcı elle Uygun'a basıyor
+
+    expect(uygunBtn.className).toContain('btn-success');
+    const uygunsuzBtn = container.querySelector('[data-uygunluk="uygun_degil"][data-index="0"]');
+    expect(uygunsuzBtn.className).not.toContain('btn-danger');
+  });
+
+  it('referans aralığı olmayan (derece_min/max null) bir üründe sıcaklık girilince Uygunluk değişmez', () => {
+    // İki ürünlü listede TAVUK BUT (id:2) derece_min/max=null taşıyor.
+    container.querySelector('#urun-ekle-btn').click(); // 2. kart
+    const input = container.querySelector('.urun-arama[data-index="1"] .search-input');
+    input.value = 'tavuk';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    container.querySelector('.urun-arama[data-index="1"] .search-results li').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    const sicaklikInput = container.querySelector('input[data-field="urunSicakligi"][data-index="1"]');
+    sicaklikInput.value = '-10';
+    sicaklikInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const uygunBtn = container.querySelector('[data-uygunluk="uygun"][data-index="1"]');
+    const uygunsuzBtn = container.querySelector('[data-uygunluk="uygun_degil"][data-index="1"]');
+    expect(uygunBtn.className).not.toContain('btn-success');
+    expect(uygunsuzBtn.className).not.toContain('btn-danger');
   });
 });
 
