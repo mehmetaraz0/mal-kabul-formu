@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('../src/lib/supabase.js', () => {
+const { order, select, insert, from } = vi.hoisted(() => {
   const order = vi.fn(() => Promise.resolve({
     data: [{ id: 1, code: 'YIY01000001', name: 'TEST ÜRÜN', unit: 'kg', category: 'ET', derece_min: -22, derece_max: -16 }],
     error: null
@@ -8,13 +8,21 @@ vi.mock('../src/lib/supabase.js', () => {
   const select = vi.fn(() => ({ order }));
   const insert = vi.fn(() => Promise.resolve({ error: null }));
   const from = vi.fn(() => ({ select, insert }));
-  return { supabase: { from } };
+  return { order, select, insert, from };
 });
+
+vi.mock('../src/lib/supabase.js', () => ({
+  supabase: { from }
+}));
 
 import { listProducts, addProduct } from '../src/lib/products.js';
 import { supabase } from '../src/lib/supabase.js';
 
 describe('products', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it('listProducts kategoriye göre gruplanabilir veri döner', async () => {
     const result = await listProducts();
     expect(result[0].category).toBe('ET');
@@ -25,7 +33,7 @@ describe('products', () => {
     const result = await listProducts();
     expect(result[0].derece_min).toBe(-22);
     expect(result[0].derece_max).toBe(-16);
-    expect(supabase.from).toHaveBeenCalledWith('products');
+    expect(select).toHaveBeenCalledWith('id, code, name, unit, category, derece_min, derece_max');
   });
 
   it('addProduct geçersiz birimde hata fırlatır', async () => {
