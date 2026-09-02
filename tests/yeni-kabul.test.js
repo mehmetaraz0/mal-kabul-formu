@@ -319,6 +319,34 @@ describe('yeni-kabul ürün kartları', () => {
     expect(uygunsuzBtn.className).toContain('btn-danger');
   });
 
+  it('referans aralığının TAM ALT SINIRINDA (dereceMin) bir sıcaklık girilince Uygunluk "uygun" olur', () => {
+    const input = container.querySelector('.urun-arama[data-index="0"] .search-input');
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    container.querySelector('.urun-arama[data-index="0"] .search-results li').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    const sicaklikInput = container.querySelector('input[data-field="urunSicakligi"][data-index="0"]');
+    sicaklikInput.value = '-22'; // dereceMin ile tam eşit
+    sicaklikInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const uygunBtn = container.querySelector('[data-uygunluk="uygun"][data-index="0"]');
+    expect(uygunBtn.className).toContain('btn-success');
+  });
+
+  it('referans aralığının TAM ÜST SINIRINDA (dereceMax) bir sıcaklık girilince Uygunluk "uygun" olur', () => {
+    const input = container.querySelector('.urun-arama[data-index="0"] .search-input');
+    input.value = '';
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    container.querySelector('.urun-arama[data-index="0"] .search-results li').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    const sicaklikInput = container.querySelector('input[data-field="urunSicakligi"][data-index="0"]');
+    sicaklikInput.value = '-16'; // dereceMax ile tam eşit
+    sicaklikInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const uygunBtn = container.querySelector('[data-uygunluk="uygun"][data-index="0"]');
+    expect(uygunBtn.className).toContain('btn-success');
+  });
+
   it('otomatik seçim sonrası kullanıcı elle farklı bir Uygunluk seçebilir', () => {
     const input = container.querySelector('.urun-arama[data-index="0"] .search-input');
     input.value = '';
