@@ -1,7 +1,7 @@
 # Mal Kabul Formu — Proje Durumu ve Devir Notu
 
 Bu belge, projeyi hiç bilmeyen bir yapay zeka asistanının (veya geliştiricinin) kaldığı yerden
-devam edebilmesi için yazıldı. Tarih: 2026-08-30 (son güncelleme: 2026-09-02, üçüncü oturum).
+devam edebilmesi için yazıldı. Tarih: 2026-08-30 (son güncelleme: 2026-09-03, dördüncü oturum).
 
 ## Proje Nedir
 
@@ -56,7 +56,11 @@ kaydediyor; sistem F.22 resmi form şablonuna uygun PDF/Excel çıktısı üreti
 2. **Zaten çalıştırılmış (production'a uygulanmış) bir migration dosyası bir daha ASLA
    düzenlenmez.** Sonradan bir düzeltme gerekirse her zaman YENİ, bir sonraki numaralı migration
    dosyası eklenir (ör. `0013_siparis_no_kaldir.sql`, `0012`'yi değil kendi başına yeni bir
-   düzeltme ekledi). En son migration numarası: **0016** (`marka` alanı).
+   düzeltme ekledi). En son migration numarası: **0017** (`derece_min`/`derece_max` — ürün bazlı
+   sıcaklık toleransı, aşağıdaki dördüncü oturum maddesine bak). **0017 kullanıcı tarafından
+   Supabase SQL Editor'da HENÜZ ÇALIŞTIRILMADI olabilir** — kontrol et:
+   `select count(*) from products where derece_min is not null;` (278'e kadar bir sayı beklenir,
+   0 dönüyorsa migration çalıştırılmamış demektir).
 3. **Supabase Edge Function'lar da elle deploy edilir** (Dashboard → Edge Functions → kodu
    yapıştır → Deploy). Şu an tek bir Edge Function var: `create-user`
    (`supabase/functions/create-user/index.ts`) — admin'in yeni kullanıcı oluşturması için.
@@ -80,7 +84,9 @@ kaydediyor; sistem F.22 resmi form şablonuna uygun PDF/Excel çıktısı üreti
 
 - `profiles` (id, full_name, **role**: `admin` | `depo_yonetici` | `kalite_ekibi`)
 - `companies` (id, sira_no, name)
-- `products` (id, code, name, unit: `kg`|`ad`, category)
+- `products` (id, code, name, unit: `kg`|`ad`, category, **derece_min/derece_max** [yeni, 0017 —
+  nullable, ürünün mal kabulde kabul edilen sıcaklık aralığı, dahil sınırlar; null ise otomatik
+  kontrol hiç yapılmaz])
 - `receipts` (id, client_uuid, company_id, receipt_date, irsaliye_no, received_by, status:
   pratikte HER ZAMAN `onaylandi` — arayüzde tek "Kaydet" butonu var ve her zaman
   `submitToQuality: true` gönderiyor. `taslak` şema/RPC seviyesinde hâlâ mümkün ama arayüzden
@@ -108,7 +114,36 @@ sentetik e-postasına çevrilip Supabase Auth'a öyle gönderiliyor — bkz. `sr
 
 ## Tamamlanan Büyük İşler (yeniden eskiye, oturum oturum)
 
-0. **Üçüncü oturum (mobil düzeltmeler + özel alan adı)** — 2026-09-02, dokuz deploy:
+0. **Dördüncü oturum (ürün bazlı derece/sıcaklık kontrolü)** — 2026-09-03, tek deploy (`9e38501`):
+   - Kullanıcı `Urun_Derece_Esleme.xlsx` paylaştı (1264 ürün, LN Kodu + referans sıcaklık:
+     `-18°C` [donuk, 247 ürün], `+4°C`/`+4°C (et)` [soğuk, 31 ürün], `Ölçüm gerekmez`/boş [986
+     ürün, kontrolsüz]). Netleştirilen tolerans kuralları: donuk **[-22, -16]**, soğuk **[2, 7]**
+     (ikisi de dahil sınır). Sadece uygulamada ZATEN kayıtlı ürünler eşleştirildi (278 satır,
+     migration 0017) — Excel'de olup uygulamada olmayan kodlar atlandı, yeni ürün eklenmedi.
+   - `products.derece_min`/`derece_max` (nullable) eklendi; `listProducts()` bunları döndürüyor.
+   - Yeni Mal Kabul'de bir ürün seçilip Sıcaklık girildiğinde, üründe referans aralık varsa
+     Uygun/Uygunsuz OTOMATİK öneriliyor (aralık dahilse Uygun) — kullanıcı yine de elle
+     değiştirebilir, kilit değil. Referansı olmayan ürünlerde otomatik davranış hiç tetiklenmez.
+   - **Final incelemede kritik bir bulgu bulunup düzeltildi**: kartta ürün DEĞİŞTİRİLİNCE (sıcaklık
+     zaten girilmişken) eski öneri güncellenmiyordu — yanlış bir ürüne ait "Uygun" etiketi kalıp
+     kaydedilebiliyordu. `applyDereceSuggestion(item)` yardımcı fonksiyonu hem ürün seçiminde hem
+     sıcaklık girişinde çağrılacak şekilde düzeltildi (aynı zamanda sıcaklık temizlenince
+     'beklemede'ye dönmesi de bu düzeltmeyle geldi).
+   - **[AÇIK/ERTELENMİŞ] Bilinen kalan boşluk** (final review'da bulundu, kritik değil, DÜZELTİLMEDİ):
+     referanslı bir üründen referansSIZ bir ürüne geçilirse (donuk→"Ölçüm gerekmez" gibi), eski
+     otomatik Uygun/Uygunsuz etiketi kartta öylece kalıyor — yeni ürün için hiç otomatik kontrol
+     olmadığından temizlenmiyor. Düşük risk (referanssız ürünler zaten hep elle kontrol edilirdi)
+     ama tutarlılık için ayrı bir işle kapatılabilir.
+   - **[ÖNEMLİ] Migration 0017'nin SQL Editor'da çalıştırılıp çalıştırılmadığı bu oturumun
+     sonunda TEYİT EDİLEMEDİ** — kod deploy edildi ama migration onayı beklenirken oturum bitti
+     olabilir. Devam eden ajan MUTLAKA şunu kontrol etsin:
+     `select count(*) from products where derece_min is not null;` — 0 dönüyorsa migration hâlâ
+     çalıştırılmamış demektir, kod canlıda ama derece kontrolü hiçbir üründe çalışmıyor olur
+     (sessiz başarısızlık değil — sadece `dereceMin`/`dereceMax` her ürün için `null` kalır ve
+     otomatik davranış hiç tetiklenmez, bu YIKICI değil ama özelliğin amacını boşa çıkarır).
+   - Test sayısı 219 → 229. Yeni ürün-derece testleri `tests/yeni-kabul.test.js` ve
+     `tests/products.test.js`'e eklendi.
+1. **Üçüncü oturum (mobil düzeltmeler + özel alan adı)** — 2026-09-02, dokuz deploy:
    - `1c32cf1` + `a2f55b6` **Dokunmatik ürün seçimi düzeltildi** (PWA'da liste öğesine
      dokununca seçim olmayıp arkadaki SKT kutusunun tarih seçicisi açılıyordu). İki aşamalı:
      (a) seçim `click` yerine `pointerup`'ta kesinleşiyor, 10px kaydırma toleransıyla — böylece
@@ -138,7 +173,7 @@ sentetik e-postasına çevrilip Supabase Auth'a öyle gönderiliyor — bkz. `sr
    - `f90ca5a` **Özel alan adına geçiş** (yukarıdaki "Canlı adres" ve "Deploy" maddelerine bak).
    - Test sayısı 200 → 219. Yeni test dosyaları: `istatistik-tablolar.test.js`.
 
-1. **İkinci oturum (bakım turu)** — üç deploy:
+2. **İkinci oturum (bakım turu)** — üç deploy:
    - `cf6423a` Service worker periyodik güncelleme kontrolü (`src/lib/sw-update.js`, 15 dk).
      Güncelleme çubuğu zaten vardı ama gün boyu açık kalan sekmelerde hiç tetiklenemiyordu.
    - `beabe0c` Kayıt Ara'dan DURUM sütunu ve filtresi kaldırıldı (kullanıcı isteği).
@@ -149,20 +184,20 @@ sentetik e-postasına çevrilip Supabase Auth'a öyle gönderiliyor — bkz. `sr
      (`TEST-DIAG`, `PAGETEST-15` ve irsaliyesiz olan) ve cascade ile 17 kalemi silindi.
      Çalıştırılan sorgu: `delete from receipts where status = 'taslak' and id in (...)`.
    - Test sayısı 180 → 200. Yeni test dosyaları: `sw-update.test.js`, `arama.test.js`.
-2. **Ürün Kartı Yeniden Tasarımı**: Yeni Mal Kabul'deki ürün girişi, satır bazlı tablodan
+3. **Ürün Kartı Yeniden Tasarımı**: Yeni Mal Kabul'deki ürün girişi, satır bazlı tablodan
    her kalem için dikey bir karta (kendi popup ürün arama kutusu, Uygun/Uygunsuz iki buton,
    Kartı Sil) dönüştürüldü. `docs/superpowers/specs/2026-08-30-urun-karti-tasarimi.md` +
    `docs/superpowers/plans/2026-08-30-urun-karti-tasarimi.md`. Ana dosya: `src/pages/yeni-kabul.js`.
-3. **Marka Alanı + Açıklama Sütunu Değişikliği**: `receipt_items.marka` (migration 0016),
+4. **Marka Alanı + Açıklama Sütunu Değişikliği**: `receipt_items.marka` (migration 0016),
    Excel/PDF çıktısındaki "Açıklama" sütunu artık Not değil Marka gösteriyor.
-4. **İstatistik Bölümü + Detay Sayfaları**: `/istatistik` (ürün/firma bazında toplam kg/adet/red
+5. **İstatistik Bölümü + Detay Sayfaları**: `/istatistik` (ürün/firma bazında toplam kg/adet/red
    sayısı, tarih filtreli), ürün/firma satırına tıklayınca `/istatistik-urun-detay` /
    `/istatistik-firma-detay` (firma+marka veya ürün+marka kırılımı). Veri katmanı:
    `src/lib/statistics.js`. Tasarım: `docs/superpowers/specs/2026-08-30-istatistik-bolumu-design.md`
    ve `docs/superpowers/specs/2026-08-30-istatistik-detay-marka-design.md`.
-5. **Rol Tabanlı Yetkilendirme + Admin Paneli**: yukarıdaki rol matrisi, `/kullanicilar` sayfası,
+6. **Rol Tabanlı Yetkilendirme + Admin Paneli**: yukarıdaki rol matrisi, `/kullanicilar` sayfası,
    `create-user` Edge Function. Tasarım: `docs/superpowers/specs/2026-08-30-rol-tabanli-yetkilendirme-design.md`.
-6. Daha eski işler (bu oturumdan önce): mal kabul formu + Supabase altyapısı (5 plan), GitHub
+7. Daha eski işler (bu oturumdan önce): mal kabul formu + Supabase altyapısı (5 plan), GitHub
    Pages deploy, popup firma/ürün arama, CSV→Excel dönüşümü + F.22 şablonuna birebir uyan
    sayfalama (13 satır/sayfa), kalite-onayı akışının tamamen kaldırılması (tek adımlı kayıt
    modeline geçiş), şirket logosunun Excel'e gömülmesi, gereksiz "Sipariş No" alanının kaldırılması.
