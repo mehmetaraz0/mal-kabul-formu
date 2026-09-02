@@ -86,6 +86,23 @@ export async function renderYeniKabul(container) {
     });
   }
 
+  // Ürünün tanımlı bir sıcaklık referans aralığı (dereceMin/dereceMax) varsa, mevcut
+  // urunSicakligi değerine göre Uygunluk'u yeniden hesaplar. Hem ürün seçildiğinde hem de
+  // Sıcaklık alanı değiştiğinde çağrılır ki iki alan hangi sırayla doldurulursa doldurulsun
+  // (veya ürün karttaki mevcut değer korunarak değiştirilsin) öneri güncel kalsın — bu bir
+  // varsayılan, kullanıcı Uygun/Uygunsuz butonlarına elle tıklayarak her zaman değiştirebilir
+  // (kilit değil, bu yüzden manuel tıklama handler'ından ÇAĞRILMAZ).
+  function applyDereceSuggestion(item) {
+    if (item.dereceMin == null || item.dereceMax == null) return;
+    if (item.urunSicakligi === '' || item.urunSicakligi == null) {
+      item.uygunluk = 'beklemede';
+      return;
+    }
+    const sicaklik = Number(item.urunSicakligi);
+    if (Number.isNaN(sicaklik)) return;
+    item.uygunluk = sicaklik >= item.dereceMin && sicaklik <= item.dereceMax ? 'uygun' : 'uygun_degil';
+  }
+
   function renderUrunKartlari() {
     const wrap = container.querySelector('#urun-kartlari');
     wrap.innerHTML = state.items
@@ -136,6 +153,11 @@ export async function renderYeniKabul(container) {
             ...state.items[i], productId: p.id, code: p.code, name: p.name, unit: p.unit,
             dereceMin: p.derece_min ?? null, dereceMax: p.derece_max ?? null
           };
+          // Ürün değiştiğinde (veya sıcaklık üründen ÖNCE girilmişse) önceki ürünün stale
+          // Uygunluk değerinin sürüklenmesini engellemek için öneriyi burada yeniden hesapla.
+          // renderUrunKartlari() zaten tam bir yeniden çizim yapıp butonları state'ten
+          // boyayacağı için ayrıca updateUygunlukButtons çağrısına gerek yok.
+          applyDereceSuggestion(state.items[i]);
           renderUrunKartlari();
         }
       });
@@ -155,18 +177,12 @@ export async function renderYeniKabul(container) {
         const field = input.dataset.field;
         state.items[idx][field] = field === 'quantity' ? Number(input.value) : input.value;
 
-        // Sıcaklık girildiğinde, üründe bir referans aralık tanımlıysa Uygunluk'u otomatik
-        // öner — bu bir varsayılan, kullanıcı Uygun/Uygunsuz butonlarına elle tıklayarak
-        // her zaman değiştirebilir (kilit değil).
+        // Sıcaklık girildiğinde (veya temizlendiğinde), üründe bir referans aralık
+        // tanımlıysa Uygunluk'u otomatik öner — bu bir varsayılan, kullanıcı Uygun/Uygunsuz
+        // butonlarına elle tıklayarak her zaman değiştirebilir (kilit değil).
         if (field === 'urunSicakligi') {
-          const item = state.items[idx];
-          if (item.dereceMin != null && item.dereceMax != null && input.value !== '') {
-            const sicaklik = Number(input.value);
-            if (!Number.isNaN(sicaklik)) {
-              item.uygunluk = sicaklik >= item.dereceMin && sicaklik <= item.dereceMax ? 'uygun' : 'uygun_degil';
-              updateUygunlukButtons(wrap, idx);
-            }
-          }
+          applyDereceSuggestion(state.items[idx]);
+          updateUygunlukButtons(wrap, idx);
         }
       });
     });
