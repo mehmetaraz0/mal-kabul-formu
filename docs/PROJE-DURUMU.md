@@ -1,7 +1,7 @@
 # Mal Kabul Formu — Proje Durumu ve Devir Notu
 
 Bu belge, projeyi hiç bilmeyen bir yapay zeka asistanının (veya geliştiricinin) kaldığı yerden
-devam edebilmesi için yazıldı. Tarih: 2026-08-30 (son güncelleme: aynı gün, ikinci oturum).
+devam edebilmesi için yazıldı. Tarih: 2026-08-30 (son güncelleme: 2026-09-02, üçüncü oturum).
 
 ## Proje Nedir
 
@@ -9,7 +9,10 @@ Bir gıda işletmesi (gürok Turizm Grubu) için mal kabul (goods-receipt) süre
 bir PWA. Depo personeli teslim alınan malları (firma, ürün, miktar, SKT, sıcaklık, uygunluk vb.)
 kaydediyor; sistem F.22 resmi form şablonuna uygun PDF/Excel çıktısı üretiyor.
 
-- **Canlı adres**: https://mehmetaraz0.github.io/mal-kabul-formu/
+- **Canlı adres**: https://malkabul.dornevi.com/ — özel alan adı (2026-09-02'de geçildi).
+  Eski adres `https://mehmetaraz0.github.io/mal-kabul-formu/` artık buraya YÖNLENDİRİYOR.
+  Alan adı `public/CNAME` dosyasıyla bildiriliyor; DNS'te `malkabul` CNAME kaydı
+  `mehmetaraz0.github.io`'ya işaret ediyor (dornevi.com kullanıcıya ait).
 - **GitHub repo**: https://github.com/mehmetaraz0/mal-kabul-formu (branch: `master`)
 - **Yerel çalışma alanı**: `D:\kabul formu\.claude\worktrees\gorsel-tasarim-yenileme` — bu bir git
   worktree, ana checkout `D:\kabul formu`'dur. Branch adı `worktree-gorsel-tasarim-yenileme`.
@@ -25,6 +28,10 @@ kaydediyor; sistem F.22 resmi form şablonuna uygun PDF/Excel çıktısı üreti
   git push origin worktree-gorsel-tasarim-yenileme:master
   ```
   Push sonrası GitHub Actions birkaç dakika içinde otomatik deploy eder.
+  **Vite `base` ayarı `/`** (özel alan adı kök dizinde yayınlandığı için). Proje sitesi
+  döneminde `/mal-kabul-formu/` idi — alt-yola geri dönülürse `base`, `start_url` ve `scope`
+  üçü birden değişmeli. Şablon/logo fetch'leri `import.meta.env.BASE_URL` kullandığı için
+  kendiliğinden uyum sağlar, elle dokunulmaz.
 - **Ortam değişkenleri**: `.env.local` (repo'da yok, gizli) — `VITE_SUPABASE_URL`,
   `VITE_SUPABASE_ANON_KEY`.
 
@@ -99,9 +106,39 @@ kaydediyor; sistem F.22 resmi form şablonuna uygun PDF/Excel çıktısı üreti
 İlk admin hesabı: kullanıcı adı `test`. Giriş kullanıcı adı/şifreyle yapılıyor (`kullaniciadi@malkabul.local`
 sentetik e-postasına çevrilip Supabase Auth'a öyle gönderiliyor — bkz. `src/pages/login.js`).
 
-## Bu Oturumda Tamamlanan Büyük İşler (yakından eskiye)
+## Tamamlanan Büyük İşler (yeniden eskiye, oturum oturum)
 
-0. **İkinci oturum (bakım turu)** — üç deploy:
+0. **Üçüncü oturum (mobil düzeltmeler + özel alan adı)** — 2026-09-02, dokuz deploy:
+   - `1c32cf1` + `a2f55b6` **Dokunmatik ürün seçimi düzeltildi** (PWA'da liste öğesine
+     dokununca seçim olmayıp arkadaki SKT kutusunun tarih seçicisi açılıyordu). İki aşamalı:
+     (a) seçim `click` yerine `pointerup`'ta kesinleşiyor, 10px kaydırma toleransıyla — böylece
+     uzun listeyi kaydırmak seçim sayılmıyor; (b) seçimden sonra gelen uyumluluk `click`'i
+     350ms boyunca yakalama fazında yutuluyor — liste kapandığı için o click boşalan
+     koordinattaki SKT kutusuna düşüyordu. `pointerup`'ta `preventDefault()` bunu engellemez;
+     spec gereği uyumluluk fare olaylarını yalnızca `pointerdown`'ın iptali bastırır, ama
+     pointerdown'ı iptal etmek kaydırmayı bozar. Kök neden, kullanıcının çektiği ekran
+     videosunun ffmpeg ile kare kare incelenmesiyle bulundu.
+   - `c0dbef3`..`f718a5c` **Telefon responsive tablolar** (subagent-driven-development, 4 task).
+     Kayıt Ara ≤640px'te karta dönüşüyor (`table.card-table.stacked`, `data-label` + CSS
+     `::before`); istatistik ve kullanıcılar tabloları sıkıştırılıyor, sayısal hücreler açık
+     `num` sınıfı taşıyor (konumdan `:nth-child` tahmini YAPILMIYOR). Spec ve plan:
+     `docs/superpowers/specs|plans/2026-08-30-telefon-responsive-tablolar*.md`.
+   - `f6c3c83` + `cc2ff01` Kayıt Ara filtre çubuğu: tarih kutuları telefonda `gg.aa.yyyy`
+     metnini gösteremeyecek kadar daralıyordu (`min-width` yoktu). Tüm filtreler 140px'e
+     çekilip 2×2 dizildi. Ayrıca final incelemenin 5 minor bulgusu kapatıldı.
+   - `fa6cf5a` **Excel çıktısı imza hatası**: kod her veri satırında `O:P` hücrelerini
+     birleştiriyordu, bu yüzden teslim alanın adı onay kutusunu da doldurmuş görünüyordu.
+     Şablonda "İmzalar" başlığı `O3:P4` olarak birleşik ama VERİ satırlarında iki ayrı kutu
+     var: **O = teslim alan (otomatik), P = onaylayan (çıktı üzerinde elle)**. Satır bazlı
+     birleştirme kaldırıldı, P'ye hiç dokunulmuyor.
+   - `f906cce` PWA ikonları gerçek logoyla değiştirildi (192, 512, apple-touch 180) ve
+     `public/favicon.png` eklendi — her konsol çıktısında görünen `favicon.ico` 404'ü kapandı.
+     Eski ikonlar birer yer tutucuydu (548 ve 1882 bayt). `public/logo.png`'ye DOKUNULMADI:
+     o şirket logosu, Excel ve yazdırma çıktısında kullanılıyor, ayrı bir varlık.
+   - `f90ca5a` **Özel alan adına geçiş** (yukarıdaki "Canlı adres" ve "Deploy" maddelerine bak).
+   - Test sayısı 200 → 219. Yeni test dosyaları: `istatistik-tablolar.test.js`.
+
+1. **İkinci oturum (bakım turu)** — üç deploy:
    - `cf6423a` Service worker periyodik güncelleme kontrolü (`src/lib/sw-update.js`, 15 dk).
      Güncelleme çubuğu zaten vardı ama gün boyu açık kalan sekmelerde hiç tetiklenemiyordu.
    - `beabe0c` Kayıt Ara'dan DURUM sütunu ve filtresi kaldırıldı (kullanıcı isteği).
@@ -112,20 +149,20 @@ sentetik e-postasına çevrilip Supabase Auth'a öyle gönderiliyor — bkz. `sr
      (`TEST-DIAG`, `PAGETEST-15` ve irsaliyesiz olan) ve cascade ile 17 kalemi silindi.
      Çalıştırılan sorgu: `delete from receipts where status = 'taslak' and id in (...)`.
    - Test sayısı 180 → 200. Yeni test dosyaları: `sw-update.test.js`, `arama.test.js`.
-1. **Ürün Kartı Yeniden Tasarımı**: Yeni Mal Kabul'deki ürün girişi, satır bazlı tablodan
+2. **Ürün Kartı Yeniden Tasarımı**: Yeni Mal Kabul'deki ürün girişi, satır bazlı tablodan
    her kalem için dikey bir karta (kendi popup ürün arama kutusu, Uygun/Uygunsuz iki buton,
    Kartı Sil) dönüştürüldü. `docs/superpowers/specs/2026-08-30-urun-karti-tasarimi.md` +
    `docs/superpowers/plans/2026-08-30-urun-karti-tasarimi.md`. Ana dosya: `src/pages/yeni-kabul.js`.
-2. **Marka Alanı + Açıklama Sütunu Değişikliği**: `receipt_items.marka` (migration 0016),
+3. **Marka Alanı + Açıklama Sütunu Değişikliği**: `receipt_items.marka` (migration 0016),
    Excel/PDF çıktısındaki "Açıklama" sütunu artık Not değil Marka gösteriyor.
-3. **İstatistik Bölümü + Detay Sayfaları**: `/istatistik` (ürün/firma bazında toplam kg/adet/red
+4. **İstatistik Bölümü + Detay Sayfaları**: `/istatistik` (ürün/firma bazında toplam kg/adet/red
    sayısı, tarih filtreli), ürün/firma satırına tıklayınca `/istatistik-urun-detay` /
    `/istatistik-firma-detay` (firma+marka veya ürün+marka kırılımı). Veri katmanı:
    `src/lib/statistics.js`. Tasarım: `docs/superpowers/specs/2026-08-30-istatistik-bolumu-design.md`
    ve `docs/superpowers/specs/2026-08-30-istatistik-detay-marka-design.md`.
-4. **Rol Tabanlı Yetkilendirme + Admin Paneli**: yukarıdaki rol matrisi, `/kullanicilar` sayfası,
+5. **Rol Tabanlı Yetkilendirme + Admin Paneli**: yukarıdaki rol matrisi, `/kullanicilar` sayfası,
    `create-user` Edge Function. Tasarım: `docs/superpowers/specs/2026-08-30-rol-tabanli-yetkilendirme-design.md`.
-5. Daha eski işler (bu oturumdan önce): mal kabul formu + Supabase altyapısı (5 plan), GitHub
+6. Daha eski işler (bu oturumdan önce): mal kabul formu + Supabase altyapısı (5 plan), GitHub
    Pages deploy, popup firma/ürün arama, CSV→Excel dönüşümü + F.22 şablonuna birebir uyan
    sayfalama (13 satır/sayfa), kalite-onayı akışının tamamen kaldırılması (tek adımlı kayıt
    modeline geçiş), şirket logosunun Excel'e gömülmesi, gereksiz "Sipariş No" alanının kaldırılması.
@@ -141,6 +178,15 @@ sentetik e-postasına çevrilip Supabase Auth'a öyle gönderiliyor — bkz. `sr
   yapıyor (`src/lib/sw-update.js`), böylece güncelleme çubuğu gün boyu açık kalan sekmelerde de
   görünebiliyor — eskiden `onNeedRefresh` yalnızca sayfa yeniden yüklenirse tetiklendiği için
   çubuk pratikte ulaşılamazdı.
+- **PWA'ların yeniden kurulması gerekiyor.** Alan adı değişikliği tarayıcı için yeni bir
+  origin demek: eski kısayol hâlâ github.io'yu işaret eder, service worker önbelleği,
+  localStorage (oturum) ve IndexedDB (çevrimdışı kuyruk) yeni adreste BOŞTUR. Geçiş sırasında
+  kuyruk boştu, veri kaybı olmadı — ama bir cihaz hâlâ eski adreste kurulu duruyorsa ve
+  senkronize edilmemiş kaydı varsa, o kayıt yeni adreste görünmez.
+- **Android maskable ikon yok.** `purpose: "maskable"` ikonu bilinçli eklenmedi: logodaki mor
+  baklava üst-sağ köşeye yakın ve dairesel maske onu kırpardı. Chrome şu an ikonu beyaz zemine
+  oturtup küçültüyor — güvenli ama ana ekranda küçük duruyor. Kenar boşluklu ayrı bir maskable
+  sürüm üretilirse tam boy görünür.
 - Design spec'lerdeki "Açık Sorular" bölümlerinde kayıtlı, bilinçli olarak ertelenmiş küçük
   konular var (ör. marka'nın serbest metin olması nedeniyle yazım tutarsızlığı riski, kayıt
   detay sayfalarında bazı alanların salt-okunur kalması) — kritik değil, sadece bilgi amaçlı.
