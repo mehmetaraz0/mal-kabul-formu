@@ -1,7 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../src/lib/supabase.js', () => {
-  const order = vi.fn(() => Promise.resolve({ data: [{ id: 1, code: 'YIY01000001', name: 'TEST ÜRÜN', unit: 'kg', category: 'ET' }], error: null }));
+  const order = vi.fn(() => Promise.resolve({
+    data: [{ id: 1, code: 'YIY01000001', name: 'TEST ÜRÜN', unit: 'kg', category: 'ET', derece_min: -22, derece_max: -16 }],
+    error: null
+  }));
   const select = vi.fn(() => ({ order }));
   const insert = vi.fn(() => Promise.resolve({ error: null }));
   const from = vi.fn(() => ({ select, insert }));
@@ -15,6 +18,13 @@ describe('products', () => {
   it('listProducts kategoriye göre gruplanabilir veri döner', async () => {
     const result = await listProducts();
     expect(result[0].category).toBe('ET');
+    expect(supabase.from).toHaveBeenCalledWith('products');
+  });
+
+  it('listProducts derece_min/derece_max alanlarını döner ve select sorgusuna dahil eder', async () => {
+    const result = await listProducts();
+    expect(result[0].derece_min).toBe(-22);
+    expect(result[0].derece_max).toBe(-16);
     expect(supabase.from).toHaveBeenCalledWith('products');
   });
 

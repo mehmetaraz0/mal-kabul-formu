@@ -13,7 +13,7 @@ export async function listProducts() {
     // We call `.order()` once server-side and finish the secondary sort
     // (by name, Turkish-aware) client-side — same effective ordering, and
     // compatible with both the real client and simple mocks.
-    const { data, error } = await supabase.from('products').select('id, code, name, unit, category').order('category');
+    const { data, error } = await supabase.from('products').select('id, code, name, unit, category, derece_min, derece_max').order('category');
     if (error) throw error;
     return [...data].sort((a, b) => {
       if (a.category !== b.category) return a.category.localeCompare(b.category, 'tr');
